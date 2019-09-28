@@ -12,3 +12,9 @@
 
 #### 参考文档
 
+[uCore plus 上 VideoCore IV 显卡驱动的移植与 OpenGL ES 的实现](<https://github.com/oscourse-tsinghua/OS2018spring-projects-g14/blob/master/report/final/doc.md>) by 贾越凯
+
+[VideoCore IV官方文档](https://docs.broadcom.com/docs-and-downloads/docs/support/videocore/VideoCoreIV-AG100-R.pdf)
+
+[Raspberry Pi 3B+介绍](<https://www.raspberrypi.org/products/raspberry-pi-3-model-b-plus/>)
+
