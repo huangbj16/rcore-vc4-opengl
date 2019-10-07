@@ -32,6 +32,7 @@ pub fn add_user_shell() {
     let init_envs = Vec::new();
 
     let init_args = vec!["busybox".into(), "ash".into()];
+    println!("init_shell: {}", init_shell);
 
     if let Ok(inode) = ROOT_INODE.lookup(init_shell) {
         processor()
@@ -46,6 +47,7 @@ pub fn add_user_shell() {
 pub fn add_user_shell() {
     use crate::drivers::CMDLINE;
     let cmdline = CMDLINE.read();
+    println!("cmdline: {}", cmdline);
     let inode = ROOT_INODE.lookup(&cmdline).unwrap();
     processor().manager().add(Thread::new_user(
         &inode,
@@ -75,6 +77,7 @@ pub extern "C" fn shell(_arg: usize) -> ! {
                 Vec::new(),
             ));
         // TODO: wait until process exits, or use user land shell completely
+        println!("shell should wait");
         } else {
             println!("Program not exist");
         }
