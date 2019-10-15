@@ -146,6 +146,15 @@ enum PropertyMailboxTagId {
 }
 use self::PropertyMailboxTagId::*;
 
+pub const MEM_FLAG_DISCARDABLE: u32 = 1 << 0; /* can be resized to 0 at any time. Use for cached data */
+pub const MEM_FLAG_NORMAL: u32= 0 << 2; /* normal allocating alias. Don't use from ARM */
+pub const MEM_FLAG_DIRECT: u32 = 1 << 2; /* 0xC alias uncached */
+pub const MEM_FLAG_COHERENT: u32 = 2 << 2; /* 0x8 alias. Non-allocating in L2 but coherent */
+pub const MEM_FLAG_L1_NONALLOCATING: u32 = (1 << 2 | 2 << 2); /* Allocating in L2 */
+pub const MEM_FLAG_ZERO: u32 = 1 << 4;  /* initialise buffer to all zeros */
+pub const MEM_FLAG_NO_INIT: u32 = 1 << 5; /* don't initialise (default is initialise to all ones */
+pub const MEM_FLAG_HINT_PERMALOCK: u32 = 1 << 6; /* Likely to be locked for long periods of time. */
+
 /// A property mailbox tag.
 #[repr(C, packed)]
 #[derive(Debug)]
@@ -254,7 +263,7 @@ macro_rules! send_one_tag {
 /// Allocates contiguous memory on the GPU. `size` and `align` are in bytes.
 /// Returns memory `handle`.
 pub fn mem_alloc(size: u32, align: u32, flags: u32) -> PropertyMailboxResult<u32> {
-    let ret = send_one_tag!(RPI_FIRMWARE_LOCK_MEMORY, [size, align, flags])?;
+    let ret = send_one_tag!(RPI_FIRMWARE_ALLOCATE_MEMORY, [size, align, flags])?;
     Ok(ret[0])
 }
 
@@ -297,6 +306,14 @@ pub fn framebuffer_get_depth() -> PropertyMailboxResult<u32> {
     let ret = send_one_tag!(RPI_FIRMWARE_FRAMEBUFFER_GET_DEPTH, [0])?;
     Ok(ret[0])
 }
+
+//// enable gpu
+pub fn gpu_enable() -> PropertyMailboxResult<()> {
+    let ret = send_one_tag!(RPI_FIRMWARE_SET_ENABLE_QPU, [1])?;
+    Ok(())
+}
+
+
 
 /// Set virtual offset. Returns `(X, Y)` in pixel.
 /// The response may not be the same as the request so it must be checked.

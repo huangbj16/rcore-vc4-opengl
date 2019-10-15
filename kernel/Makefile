@@ -156,7 +156,7 @@ qemu_opts += \
 	-smp 4 \
 	-serial null -serial mon:stdio \
 	-kernel $(kernel_img) \
-	-drive file=$(USER_QCOW2),format=qcow2,id=sfs
+	-drive file=$(USER_QCOW2),format=qcow2,id=sfs \
 
 else ifeq ($(arch), mipsel)
 ifeq ($(board), malta)
@@ -345,7 +345,7 @@ ifdef sd_card
 .PHONY:
 install: $(kernel_img)
 	cp $(kernel_img) $(sd_card)/kernel8.img
-	sudo umount $(sd_card)
+	sudo diskutil umount $(sd_card)
 endif
 
 endif

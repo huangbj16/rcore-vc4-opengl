@@ -13,6 +13,7 @@ pub mod paging;
 pub mod rand;
 pub mod syscall;
 pub mod timer;
+use crate::drivers::gpu::fb::{self, ColorDepth, ColorFormat, FramebufferInfo, FramebufferResult};
 
 #[cfg(feature = "board_raspi3")]
 #[path = "board/raspi3/mod.rs"]
@@ -39,10 +40,25 @@ pub extern "C" fn master_main() -> ! {
 
     crate::process::init();
 
+    board::test_gpu();
+    //test_framebuffer();
+
     // wake up other CPUs
     AP_CAN_INIT.store(true, Ordering::Relaxed);
 
     crate::kmain();
+}
+
+fn test_framebuffer() {
+    let mut lock = fb::FRAME_BUFFER.lock();
+    if let Some(fbr) = lock.as_mut() {
+        for x in 0..fbr.fb_info.xres {
+            for y in 0..fbr.fb_info.yres {
+                fbr.write(x, y, 127)
+            }
+        }
+        println!("test frame buffer");
+    }
 }
 
 #[no_mangle]
