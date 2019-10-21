@@ -16,4 +16,4 @@
 
 黄冰鉴：成功配置好了Linux环境，生成了可用的aarch64 rCore Kernel，复现了孙桢波在mac环境下的成果。
 
-[](hackdrive_linux.jpg)
+![](hackdrive_linux.jpg)
