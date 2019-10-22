@@ -17,3 +17,12 @@
 黄冰鉴：成功配置好了Linux环境，生成了可用的aarch64 rCore Kernel，复现了孙桢波在mac环境下的成果。
 
 ![](hackdrive_linux.jpg)
+
+完整阅读ucore-plus的vc4的kernel部分代码，目前完成部分移植。
+
+存在问题：C Token-pasting operator ##在rust较难实现，需要替代方案。
+
+
+
+孙桢波：阅读ucore-plus的vc4代码，开始移植user mode部分。
+
