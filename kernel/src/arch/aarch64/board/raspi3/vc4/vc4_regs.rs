@@ -5,12 +5,13 @@
  * it under the terms of the GNU General Public License version 2 as
  * published by the Free Software Foundation.
  */
+#[allow(non_camel_case_types)]
 
 pub const V3D_BASE :usize =	0x20c00000;
 
 //#ifndef BIT
 pub const fn BIT(nr: usize) -> usize {
-    1u64 << (nr)
+    1 << (nr)
 }
 //#endif
 
@@ -19,18 +20,18 @@ pub const fn VC4_MASK(high: usize, low: usize) -> usize {
 }
 
 /* Using the GNU statement expression extension */
-pub const fn VC4_SET_FIELD(value: usize, field: usize) -> usize {
-    let fieldval : usize = (value) << field##_SHIFT;
-    assert((fieldval & ~ field ## _MASK) == 0);	
-    fieldval & field##_MASK
+pub fn VC4_SET_FIELD(value: usize, field_shift: usize, field_mask: usize) -> usize {
+    let fieldval : usize = (value) << field_shift;
+    assert!((fieldval &  !field_mask) == 0);
+    fieldval & field_mask
 }
 
-pub const fn VC4_GET_FIELD(word: usize, field: usize) -> usize{
-     (((word) & field##_MASK) >> field##_SHIFT)
+pub const fn VC4_GET_FIELD(word: usize, field_shift: usize, field_mask: usize) -> usize{
+     (((word) & field_mask) >> field_shift)
 }
 
 pub const V3D_IDENT0 :usize =  0x00000;
-pub const V3D_EXPECTED_IDENT0 :usize =  ((2 << 24) | ('V' << 0) | ('3' << 8) | ('D' << 16));
+pub const V3D_EXPECTED_IDENT0 :usize =  ((2 << 24) | (('V' as usize) << 0) | (('3' as usize) << 8) | (('D' as usize) << 16));
 
 pub const V3D_IDENT1  :usize =  0x00004;
 
@@ -680,6 +681,7 @@ pub const VC4_HD_FRAME_COUNT : usize = 0x068;
 /* HVS display list information. */
 pub const HVS_BOOTLOADER_DLIST_END : usize = 32;
 
+#[allow(non_camel_case_types)]
 enum hvs_pixel_format {
 	/* 8bpp */
 	HVS_PIXEL_FORMAT_RGB332 = 0,

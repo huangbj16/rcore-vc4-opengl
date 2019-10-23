@@ -1,3 +1,6 @@
+use vc4_regs::{BIT, VC4_MASK};
+
+#[allow(non_camel_case_types)]
 enum vc4_packet {
     VC4_PACKET_HALT = 0,
     VC4_PACKET_NOP = 1,
@@ -266,6 +269,7 @@ pub const VC4_PRIMITIVE_LIST_FORMAT_TYPE_LINES: usize =(1 << 0);
 pub const VC4_PRIMITIVE_LIST_FORMAT_TYPE_TRIANGLES  : usize = (2 << 0);
 pub const VC4_PRIMITIVE_LIST_FORMAT_TYPE_RHT: usize =(3 << 0);
 
+#[allow(non_camel_case_types)]
 enum vc4_texture_data_type {
 VC4_TEXTURE_TYPE_RGBA8888 = 0,
 VC4_TEXTURE_TYPE_RGBX8888 = 1,
