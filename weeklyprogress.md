@@ -24,5 +24,5 @@
 
 
 
-孙桢波：阅读ucore-plus的vc4代码，开始移植user mode部分。
+孙桢波：阅读ucore-plus的vc4代码，将ucore中的opengl部分移植到rCore中 ，并用musl进行编译。
 
