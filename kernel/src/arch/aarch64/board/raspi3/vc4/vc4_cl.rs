@@ -5,10 +5,10 @@ struct vc4_bo;
 struct vc4_context;
 
 struct vc4_cl {
-    base: usize;
-    next: usize;
-    reloc_next: usize;
-    size: size_t;//what is size_t
+    base: usize,
+    next: usize,
+    reloc_next: usize,
+    size: size_t,//what is size_t
 }
 
 //in C, parameter is a pointer vc4_cl* cl; in Rust, I use reference &mut vc4_cl to be safe.
@@ -95,13 +95,13 @@ pub fn cl_u8(cl: &mut vc4_cl, n: u8)
 
 pub fn cl_u16(cl: &mut vc4_cl, n: u16)
 {
-    put_unaligned_16(&cl->next, n);
+    put_unaligned_16(&(cl.next as u16), n);
     cl_advance(cl, 2);
 }
 
 pub fn cl_u32(cl: &mut vc4_cl, n: u32)
 {
-    put_unaligned_32(&cl->next, n);
+    put_unaligned_32(&(cl.next as u32), n);
     cl_advance(cl, 4);
 }
 
