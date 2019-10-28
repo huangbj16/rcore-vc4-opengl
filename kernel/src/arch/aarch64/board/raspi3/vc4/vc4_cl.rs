@@ -79,9 +79,9 @@ pub fn put_unaligned_16(ptr: &mut u16, val: u16)
 
 pub fn cl_u8(cl: &mut vc4_cl, n: u8)
 {
+    let mut temp = &(cl.next as u8);
     unsafe{
-        let *mut next = cl.next as u8;
-        *next = n;
+        *temp = n;
     }
     cl_advance(cl, 1);
 }
@@ -93,32 +93,37 @@ pub fn cl_u8(cl: &mut vc4_cl, n: u8)
 // 	cl_advance(cl, 1);
 // }
 
-pub fn cl_u16(cl: *mut vc4_cl, n: u16)
+pub fn cl_u16(cl: &mut vc4_cl, n: u16)
 {
-put_unaligned_16(cl->next, n);
-cl_advance(cl, 2);
+    put_unaligned_16(&cl->next, n);
+    cl_advance(cl, 2);
 }
 
-pub fn cl_u32(cl: *mut vc4_cl, n: u32)
+pub fn cl_u32(cl: &mut vc4_cl, n: u32)
 {
-put_unaligned_32(cl->next, n);
-cl_advance(cl, 4);
+    put_unaligned_32(&cl->next, n);
+    cl_advance(cl, 4);
 }
 
-pub fn cl_aligned_u32(cl: *mut vc4_cl, n: u32)
+pub fn cl_aligned_u32(cl: &mut vc4_cl, n: u32)
 {
-*(uint32_t *)cl->next = n;
-cl_advance(cl, 4);
+    let mut temp = &(cl.next as u32);
+    unsafe{
+        *temp = n;
+    }
+    cl_advance(cl, 4);
 }
 
-pub fn cl_f(cl: *mut vc4_cl, f: f32)
+pub fn cl_f(cl: &mut vc4_cl, f: f32)
 {
-cl_u32(cl, *((uint32_t *)&f));
+    let f_int = f as u32;
+    cl_u32(cl, f_int);
 }
 
-pub fn cl_aligned_f(cl: *mut vc4_cl, f: f32)
+pub fn cl_aligned_f(cl: &mut vc4_cl, f: f32)
 {
-cl_aligned_u32(cl, *((uint32_t *)&f));
+    let f_int = f as u32;
+    cl_aligned_u32(cl, f_int);
 }
 
 //#endif /* VC4_CL_H */
