@@ -26,3 +26,13 @@
 
 孙桢波：阅读ucore-plus的vc4代码，将ucore中的opengl部分移植到rCore中 ，并用musl进行编译。
 
+
+
+---
+
+#### Week 7-8
+
+黄冰鉴：继续移植vc4 driver代码，新增：vc4_cl.rs/vc4_drm.rs/vc4_drv.rs
+
+更新移植log：[log](<https://github.com/huangbj16/rcore-vc4-opengl/wiki/vc4-kernel-transplant-log>)
+
