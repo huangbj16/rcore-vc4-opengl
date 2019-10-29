@@ -218,163 +218,171 @@ pub fn vc4_allocate_bin_bo(dev: &mut device) -> i32{//struct device *
 
 pub fn vc4_bind_fb_bo(dev: &mut device) -> i32{
 	let mut vc4 = to_vc4_dev(dev);
-	struct vc4_bo *bo;
-	struct fb_info *fb;
 
-	fb = get_fb_info();
-	if (fb == NULL)
-		return -E_NODEV;
+	let fb = get_fb_info();
+	if fb.is_none() {
+		error!("vc4_allocate_bin_bo: ERROR_NO_DEV");
+//		return -E_NODEV;
+	}
 
-	bo = &vc4->handle_bo_map[fb->handle];
-	bo->size = fb->screen_size;
-	bo->handle = fb->handle;
-	bo->paddr = fb->fb_bus_address;
-	bo->vaddr = fb->screen_base;
-	bo->type = VC4_BO_TYPE_FB;
-	list_init(&bo->unref_head);
+	let mut bo = vc4.handle_bo_map[fb.handle] as &mut vc4_bo;
+	bo.size = fb.screen_size;
+	bo.handle = fb.handle;
+	bo.paddr = fb.fb_bus_address;
+	bo.vaddr = fb.screen_base;
+	bo.botype = VC4_BO_TYPE_FB;
+	list_init(bo.unref_head);
 
-	vc4->fb_bo = bo;
+	vc4.fb_bo = bo as usize;
 
 	return 0;
 }
 
-static int vc4_probe(struct device *dev)
-{
-	struct vc4_dev *vc4;
-	int ret = 0;
+pub fn vc4_probe(mut dev: &mut device) -> i32{
+	let mut vc4 = vc4_dev;
+	let mut ret = 0;
 
-	static_assert((int)VC4_DEV_BO_NENTRY > 128);
-	vc4 = (struct vc4_dev *)kmalloc(sizeof(struct vc4_dev) +
-					VC4_DEV_BUFSIZE);
-	if (!vc4)
-		return -E_NOMEM;
+	assert!((VC4_DEV_BO_NENTRY as i32) > 128);
+//	static_assert((int)VC4_DEV_BO_NENTRY > 128);
+//	vc4 = (struct vc4_dev *)kmalloc(sizeof(struct vc4_dev) +
+//					VC4_DEV_BUFSIZE); ??? can't understand why need to malloc a memory larger than struct needed.
+//	if (!vc4)
+//		return -E_NOMEM;
 
 	// The blob now has this nice handy call which powers up the v3d pipeline.
-	if ((ret = mbox_qpu_enable(1)) != 0) {
-		kprintf("VC4: cannot enable qpu.\n");
-		goto fail;
+	if (ret = mbox_qpu_enable(1)) != 0 {
+		printf!("VC4: cannot enable qpu.\n");
+		printf!("VideoCore IV GPU failed to initialize.\n");
+		ret
 	}
 
-	if (V3D_READ(V3D_IDENT0) != V3D_EXPECTED_IDENT0) {
-		ret = -E_INVAL;
-		kprintf("VC4: V3D_IDENT0 read 0x%08x instead of 0x%08x\n",
+	if V3D_READ(V3D_IDENT0) != V3D_EXPECTED_IDENT0 {
+		ret = -E_INVAL;//???where can I find all these C CONST?
+		printf!("VC4: V3D_IDENT0 read 0x{%08x} instead of 0x{%08x}\n",
 			V3D_READ(V3D_IDENT0), V3D_EXPECTED_IDENT0);
-		goto fail;
+		printf!("VideoCore IV GPU failed to initialize.\n");
+		ret
 	}
 
-	vc4->dev = dev;
-	vc4->handle_bo_map = (struct vc4_bo *)(vc4 + 1);
-	dev->driver_data = vc4;
+	vc4.dev = dev;
+	vc4.handle_bo_map = vc4.bin_bo;
+	dev.driver_data = vc4;
 
-	bo_map_init(vc4->handle_bo_map);
+	bo_map_init(vc4.handle_bo_map);
 
-	if (fb_check() && (ret = vc4_bind_fb_bo(dev))) {
-		kprintf("VC4: cannot bind framebuffer bo.\n");
-		goto fail;
+	if fb_check() && (ret = vc4_bind_fb_bo(dev)) != 0 {
+		printf!("VC4: cannot bind framebuffer bo.\n");
+		printf!("VideoCore IV GPU failed to initialize.\n");
+		ret
 	}
-	if ((ret = vc4_allocate_bin_bo(dev))) {
-		kprintf("VC4: cannot alloc bin bo.\n");
-		goto fail;
+	if (ret = vc4_allocate_bin_bo(dev))!=0 {
+		printf!("VC4: cannot alloc bin bo.\n");
+		printf!("VideoCore IV GPU failed to initialize.\n");
+		ret
 	}
 
-	kprintf("VideoCore IV GPU initialized.\n");
+	printf!("VideoCore IV GPU initialized.\n");
+	ret
 
-	goto out;
-
-fail:
-	kfree(vc4);
-	kprintf("VideoCore IV GPU failed to initialize.\n");
-out:
-	return ret;
+//	goto out;
+/* goto statement cannot be used in rust. */
+//fail:
+//	kfree(vc4);
+//	kprintf("VideoCore IV GPU failed to initialize.\n");
+//out:
+//	return ret;
 }
 
-static void vc4_gem_destroy()
+pub fn vc4_gem_destroy()
 {
 	// TODO
 }
 
-static int vc4_open(struct device *dev, uint32_t open_flags)
+pub fn vc4_open(dev: &mut device, open_flags: u32) -> i32
 {
 	return 0;
 }
 
-static int vc4_close(struct device *dev)
+pub fn vc4_close(dev: &mut device) -> i32
 {
 	return 0;
 }
 
-static int vc4_ioctl(struct device *dev, int op, void *data)
+pub fn vc4_ioctl(mut dev: &mut device, op: i32, data: usize) -> i32//void *data
 {
-	struct vc4_dev *vc4 = to_vc4_dev(dev);
-	if (!vc4)
-		return -E_NODEV;
+	let mut vc4 = to_vc4_dev(dev);
+//	if (!vc4)
+//		return -E_NODEV;
 
-	int ret = 0;
+	let mut ret = 0;
 
-	switch (op) {
-	case DRM_IOCTL_VC4_SUBMIT_CL:
-		ret = vc4_submit_cl_ioctl(dev, data);
-		break;
-	case DRM_IOCTL_VC4_CREATE_BO:
-		ret = vc4_create_bo_ioctl(dev, data);
-		break;
-	case DRM_IOCTL_VC4_MMAP_BO:
-		ret = vc4_mmap_bo_ioctl(dev, data);
-		break;
-	case DRM_IOCTL_VC4_FREE_BO:
-		ret = vc4_free_bo_ioctl(dev, data);
-		break;
-	default:
-		ret = -E_INVAL;
+	match op {
+		DRM_IOCTL_VC4_SUBMIT_CL => {
+			ret = vc4_submit_cl_ioctl(dev, data);
+			break;
+		}
+		DRM_IOCTL_VC4_CREATE_BO => {
+			ret = vc4_create_bo_ioctl(dev, data);
+			break;
+		}
+		DRM_IOCTL_VC4_MMAP_BO => {
+			ret = vc4_mmap_bo_ioctl(dev, data);
+			break;
+		}
+		DRM_IOCTL_VC4_FREE_BO => {
+			ret = vc4_free_bo_ioctl(dev, data);
+			break;
+		}
+		_ => {
+			ret = -E_INVAL;//cannot find const
+			break;
+		}
 	}
-	return ret;
+	ret
 }
 
-static int vc4_device_init(struct device *dev)
+pub fn vc4_device_init(mut dev: &mut device) -> i32
 {
-	memset(dev, 0, sizeof(*dev));
+	dev = device;
 
-	int ret;
-	if ((ret = vc4_probe(dev)) != 0) {
+	let mut ret;
+	if (ret = vc4_probe(dev)) != 0 {
 		return ret;
 	}
 
-	dev->d_blocks = 0;
-	dev->d_blocksize = 1;
-	dev->d_open = vc4_open;
-	dev->d_close = vc4_close;
-	dev->d_io = NULL_VOP_INVAL;
-	dev->d_ioctl = vc4_ioctl;
-	dev->d_mmap = NULL_VOP_INVAL;
+	dev.d_blocks = 0;
+	dev.d_blocksize = 1;
+	dev.d_open = vc4_open;
+	dev.d_close = vc4_close;
+	dev.d_io = NULL_VOP_INVAL;
+	dev.d_ioctl = vc4_ioctl;
+	dev.d_mmap = NULL_VOP_INVAL;
 
-	return ret;
+	ret
 }
 
-int dev_init_vc4()
+pub fn dev_init_vc4() -> i32
 {
-	struct inode *node;
-	int ret;
-	if ((node = dev_create_inode()) == NULL) {
+	let mut node;
+	let mut ret;
+	if (node = dev_create_inode()).is_none() {
 		ret = -E_NODEV;
-		kprintf("vc4: dev_create_node failed: %e\n", ret);
-		goto out;
+		printf!("vc4: dev_create_node failed: {%e}\n", ret);
+		ret
 	}
 
-	if ((ret = vc4_device_init(vop_info(node, device))) != 0) {
-		kprintf("vc4: vc4_device_init failed: %e\n", ret);
-		goto free_node;
+	if (ret = vc4_device_init(vop_info(node, device))) != 0 {
+		printf!("vc4: vc4_device_init failed: {%e}\n", ret);
+		dev_kill_inode(&mut node);
+		ret
 	}
-	if ((ret = vfs_add_dev("gpu0", node, 0)) != 0) {
-		kprintf("vc4: vfs_add_dev failed: %e\n", ret);
-		goto free_node;
+	if (ret = vfs_add_dev("gpu0", node, 0)) != 0 {
+		kprintf("vc4: vfs_add_dev failed: {%e}\n", ret);
+		dev_kill_inode(&mut node);
+		ret
 	}
 
-	return 0;
-
-free_node:
-	dev_kill_inode(node);
-out:
-	return ret;
+	0
 }
 
 
