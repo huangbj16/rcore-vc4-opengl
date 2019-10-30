@@ -27,7 +27,7 @@ struct vc4_bo {
 	handle: u32,
 	paddr: u32,
 	vaddr: usize,//void*
-	botype: vc4_kernel_bo_type,
+	bo_type: vc4_kernel_bo_type,
 	/* List entry for the BO's position in either
 	 * vc4_exec_info->unref_list or vc4_dev->bo_cache.time_list
 	 */
@@ -231,7 +231,7 @@ pub fn vc4_bind_fb_bo(dev: &mut device) -> i32{
 	bo.handle = fb.handle;
 	bo.paddr = fb.fb_bus_address;
 	bo.vaddr = fb.screen_base;
-	bo.botype = VC4_BO_TYPE_FB;
+	bo.bo_type = VC4_BO_TYPE_FB;
 	list_init(bo.unref_head);
 
 	vc4.fb_bo = bo as usize;
