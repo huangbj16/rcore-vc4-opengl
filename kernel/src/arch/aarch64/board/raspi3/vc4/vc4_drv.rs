@@ -11,6 +11,7 @@
 use vc4_regs::*;
 use rcore_memory::PAGE_SIZE;
 use std::mem;
+use crate::syscall::SysError::*;
 //#include "bcm2708_fb.h"
 
 enum vc4_kernel_bo_type {
@@ -207,7 +208,7 @@ pub fn vc4_allocate_bin_bo(dev: &mut device) -> i32{//struct device *
 	let bo = vc4_bo_create(dev, size, VC4_BO_TYPE_BIN);
 	if bo.is_none() {
 		error!("vc4_allocate_bin_bo: ERROR_NO_MEMORY");
-//		return -E_NOMEM;
+		ENOMEM
 	}
 
 	vc4.bin_bo = bo;
@@ -222,7 +223,7 @@ pub fn vc4_bind_fb_bo(dev: &mut device) -> i32{
 	let fb = get_fb_info();
 	if fb.is_none() {
 		error!("vc4_allocate_bin_bo: ERROR_NO_DEV");
-//		return -E_NODEV;
+		ENODEV
 	}
 
 	let mut bo = vc4.handle_bo_map[fb.handle] as &mut vc4_bo;
@@ -246,8 +247,8 @@ pub fn vc4_probe(mut dev: &mut device) -> i32{
 //	static_assert((int)VC4_DEV_BO_NENTRY > 128);
 //	vc4 = (struct vc4_dev *)kmalloc(sizeof(struct vc4_dev) +
 //					VC4_DEV_BUFSIZE); ??? can't understand why need to malloc a memory larger than struct needed.
-//	if (!vc4)
-//		return -E_NOMEM;
+	if vc4.is_none
+		ENOMEM
 
 	// The blob now has this nice handy call which powers up the v3d pipeline.
 	if (ret = mbox_qpu_enable(1)) != 0 {
@@ -257,11 +258,10 @@ pub fn vc4_probe(mut dev: &mut device) -> i32{
 	}
 
 	if V3D_READ(V3D_IDENT0) != V3D_EXPECTED_IDENT0 {
-		ret = -E_INVAL;//???where can I find all these C CONST?
 		printf!("VC4: V3D_IDENT0 read 0x{%08x} instead of 0x{%08x}\n",
 			V3D_READ(V3D_IDENT0), V3D_EXPECTED_IDENT0);
 		printf!("VideoCore IV GPU failed to initialize.\n");
-		ret
+		EINVAL
 	}
 
 	vc4.dev = dev;
@@ -311,8 +311,8 @@ pub fn vc4_close(dev: &mut device) -> i32
 pub fn vc4_ioctl(mut dev: &mut device, op: i32, data: usize) -> i32//void *data
 {
 	let mut vc4 = to_vc4_dev(dev);
-//	if (!vc4)
-//		return -E_NODEV;
+	if vc4.is_none():
+		ENODEV
 
 	let mut ret = 0;
 
@@ -334,7 +334,7 @@ pub fn vc4_ioctl(mut dev: &mut device, op: i32, data: usize) -> i32//void *data
 			break;
 		}
 		_ => {
-			ret = -E_INVAL;//cannot find const
+			ret = EINVAL;
 			break;
 		}
 	}
@@ -366,7 +366,7 @@ pub fn dev_init_vc4() -> i32
 	let mut node;
 	let mut ret;
 	if (node = dev_create_inode()).is_none() {
-		ret = -E_NODEV;
+		ret = E_NODEV;
 		printf!("vc4: dev_create_node failed: {%e}\n", ret);
 		ret
 	}
