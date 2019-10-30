@@ -101,7 +101,7 @@ struct drm_vc4_submit_cl {
 	clear_z: u32,
 	clear_s: u8,
 
-	pad = 24,//__u32 pad:24;
+	//__u32 pad:24;
 
 	flags: u32,
 

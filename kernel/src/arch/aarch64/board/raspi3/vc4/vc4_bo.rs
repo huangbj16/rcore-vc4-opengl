@@ -11,38 +11,38 @@ use crate::rcore_memory::PAGE_SIZE;
 // #include "vc4_drm.h"
 // #include "mailbox_property.h"
 
-pub fn vc4_bo_create(dev: &device, size: u32, bo_type: vc4_kernel_bo_type) -> vc4_bo
+pub fn vc4_bo_create(dev: &device, size: u32, bo_type: vc4_kernel_bo_type) -> &mut vc4_bo
 {
 	let vc4 = to_vc4_dev(dev);
 
 	if (bo_type == VC4_BO_TYPE_FB)
-		return vc4.fb_bo;
+		vc4.fb_bo
 
 	if size == 0:
-		return None;
+		None
 
 	size = ROUNDUP(size, PAGE_SIZE);
 
 	let handle =
 		mbox_mem_alloc(size, PAGE_SIZE, MEM_FLAG_COHERENT | MEM_FLAG_ZERO);
 	if handle == 0 {
-		printf!("VC4: unable to allocate memory with size {%08x}\n", size);
-		return None;
+		println!("VC4: unable to allocate memory with size {%08x}\n", size);
+		None
 	}
 	if handle >= VC4_DEV_BO_NENTRY {
-		printf!("VC4: too many bo handles, VC4_DEV_BO_NENTRY = {%d}\n",
+		println!("VC4: too many bo handles, VC4_DEV_BO_NENTRY = {%d}\n",
 			VC4_DEV_BO_NENTRY);
 		// goto free_mem;
 		mbox_mem_free(handle);
-		return None;
+		None
 	}
 
 	let bus_addr = mbox_mem_lock(handle);
 	if bus_addr == 0 {
-		printf!("VC4: unable to lock memory at handle {%08x}\n", handle);
+		println!("VC4: unable to lock memory at handle {%08x}\n", handle);
 		// goto free_mem;
 		mbox_mem_free(handle);
-		return None;
+		None
 	}
 
 	__boot_map_iomem(bus_addr, size, bus_addr);
@@ -67,7 +67,7 @@ pub fn vc4_bo_destroy(dev: device, bo: &mut vc4_bo)
 	// 	bo->paddr, bo->vaddr);
 
 	if bo.bo_type == VC4_BO_TYPE_FB :
-		return;
+		None
 
 	//???where is iounmap?
 	__ucore_iounmap(bo.vaddr, bo.size);
@@ -77,95 +77,99 @@ pub fn vc4_bo_destroy(dev: device, bo: &mut vc4_bo)
 	// memset(bo, 0, sizeof(struct vc4_bo));
 }
 
-struct vc4_bo *vc4_lookup_bo(struct device *dev, uint32_t handle)
+pub fn vc4_lookup_bo(dev: & device, handle: u32) -> &mut vc4_bo
 {
-	struct vc4_dev *vc4 = to_vc4_dev(dev);
-	struct vc4_bo *bo;
+	let mut vc4 = to_vc4_dev(dev);
+	let mut bo: &mut vc4_bo;
 
-	if (handle >= VC4_DEV_BO_NENTRY) {
-		return NULL;
+	if handle >= VC4_DEV_BO_NENTRY {
+		None
 	}
 
-	bo = &vc4->handle_bo_map[handle];
-	if (bo->handle != handle || !bo->size) {
-		return NULL;
+	bo = &mut vc4.handle_bo_map[handle];
+	if bo->handle != handle || !bo->size {
+		None
 	}
 
-	return bo;
+	bo
 }
 
-int vc4_create_bo_ioctl(struct device *dev, void *data)
+pub fn vc4_create_bo_ioctl(dev: &mut device, args: &mut drm_vc4_create_bo) -> i32
 {
-	struct drm_vc4_create_bo *args = data;
-	struct vc4_bo *bo = NULL;
-	int ret;
+	//neglected
+	// struct drm_vc4_create_bo *args = data; 
+	let mut bo : &mut vc4_bo;
+	let ret: i32;
 
-	if (args->flags & VC4_CREATE_BO_IS_FRAMEBUFFER)
-		bo = vc4_bo_create(dev, args->size, VC4_BO_TYPE_FB);
-	else
-		bo = vc4_bo_create(dev, args->size, VC4_BO_TYPE_V3D);
-	if (bo == NULL)
-		return -E_NOMEM;
+	if (args.flags & VC4_CREATE_BO_IS_FRAMEBUFFER as i32) != 0 {
+		bo = vc4_bo_create(dev, args.size, VC4_BO_TYPE_FB);
+	}
+	else {
+		bo = vc4_bo_create(dev, args.size, VC4_BO_TYPE_V3D);
+	}
+	if bo.is_None()
+		ENOMEM//error
 
-	args->size = bo->size;
-	args->handle = bo->handle;
+	args.size = bo.size;
+	args.handle = bo.handle;
 
-	return 0;
+	0//success
 }
 
-static int vc4_mmap(struct device *dev, struct vma_struct *vma, uintptr_t paddr)
+pub fn vc4_mmap(dev: & device, vma: &mut vma_struct, paddr: usize) -> i32
 {
-	uintptr_t start = paddr;
-	start &= ~(PGSIZE - 1);
-	void *r = (void *)remap_pfn_range(vma->vm_start, start >> PGSHIFT,
-					  vma->vm_end - vma->vm_start);
-	if (!r) {
-		return -E_NOMEM;
+	let mut start = paddr;
+	start &= ~(PAGE_SIZE - 1);
+	let r = remap_pfn_range(vma.vm_start, start >> PAGE_SHIFT,
+					  vma.vm_end - vma.vm_start);
+	if r == 0 {
+		ENOMEM//error
 	}
-	vma->vm_start = (uintptr_t)r;
-	return 0;
+	vma.vm_start = r;
+	0//success
 }
 
-int vc4_mmap_bo_ioctl(struct device *dev, void *data)
+pub fn vc4_mmap_bo_ioctl(dev: &mut device, data: &mut drm_vc4_mmap_bo) -> i32
 {
-	struct drm_vc4_mmap_bo *args = data;
-	struct vc4_bo *bo;
-	int ret = 0;
+	//neglected
+	// struct drm_vc4_mmap_bo *args = data;
+	let mut bo: &mut vc4_bo;
+	let mut ret = 0i32;
 
-	bo = vc4_lookup_bo(dev, args->handle);
-	if (bo == NULL) {
-		return -E_INVAL;
+	bo = vc4_lookup_bo(dev, args.handle);
+	if bo.is_None() {
+		EINVAL
 	}
 
-	struct vma_struct *vma = NULL;
-	vma = (struct vma_struct *)kmalloc(sizeof(struct vma_struct));
-	if (!vma) {
-		return -E_NOMEM;
+	let mut vma = vma_struct;//init
+	if vma.is_None() {
+		ENOMEM
 	}
 
-	uint32_t len = ROUNDUP(bo->size, PGSIZE);
-	vma->vm_start = 0;
-	vma->vm_end = vma->vm_start + len;
+	let mut len = ROUNDUP(bo.size, PAGE_SIZE);
+	vma.vm_start = 0;
+	vma.vm_end = len;
 
-	ret = vc4_mmap(dev, vma, bo->paddr);
-	args->offset = vma->vm_start;
-	kfree(vma);
+	ret = vc4_mmap(dev, vma, bo.paddr);
+	args.offset = vma.vm_start;
+	// not needed, auto GC;
+	// kfree(vma);
 
-	return ret;
+	ret
 }
 
-int vc4_free_bo_ioctl(struct device *dev, void *data)
+pub fn vc4_free_bo_ioctl(dev: &mut device, args: &mut drm_vc4_free_bo) -> i32
 {
-	struct drm_vc4_free_bo *args = data;
-	struct vc4_bo *bo;
-	int ret = 0;
+	
+	let mut bo: &mut vc4_bo;
+	let mut ret = 0i32;
 
-	bo = vc4_lookup_bo(dev, args->handle);
-	if (bo == NULL) {
-		return -E_INVAL;
+	bo = vc4_lookup_bo(dev, args.handle);
+	if bo.is_None() {
+		EINVAL
 	}
 
 	vc4_bo_destroy(dev, bo);
 
-	return ret;
+	ret
 }
