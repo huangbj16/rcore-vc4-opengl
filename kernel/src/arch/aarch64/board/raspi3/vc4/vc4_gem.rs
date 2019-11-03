@@ -6,6 +6,7 @@ use vc4_drv::*;
 use vc4_drm::*;
 use vc4_regs::*;
 use mailbox::*;
+use core::mem::size_of;
 use crate::syscall::SysError::*;
 // #include "vc4_drv.h"
 // #include "vc4_drm.h"
@@ -72,7 +73,7 @@ pub fn vc4_submit_next_render_job(dev: &mut device, exec: &mut vc4_exec_info)
 	// reset rendering frame count
 	V3D_WRITE(V3D_RFC, 1);
 
-	submit_cl(dev, 1, exec.ct1ca, exec.ct1ea);
+	submit_cl(&dev, 1, exec.ct1ca, exec.ct1ea);
 
 	// wait for render to finish
 	while (V3D_READ(V3D_RFC) == 0);
@@ -112,139 +113,115 @@ pub fn vc4_cl_lookup_bos(dev: &mut device, exec: &mut vc4_exec_info) -> i32
 	let vc4 = to_vc4_dev(&dev);
 	// struct drm_vc4_submit_cl *args = exec->args;
 	// struct mm_struct *mm = current->mm;
-	let mut handles: u32;
-	let mut ret = 0;
 	assert!(!current.mm.is_None());
 
 	exec.bo_count = exec.args.bo_handle_count;
 
-	if !exec-.bo_count.is_None() {
+	if exec.bo_count == 0 {
 		0
 	}
 
-	exec->fb_bo = vc4->fb_bo;
-	exec->bo = (struct vc4_bo **)kmalloc(exec->bo_count *
-					     sizeof(struct vc4_bo *));
-	if (!exec->bo) {
-		kprintf("vc4: Failed to allocate validated BO pointers\n");
-		return -E_NOMEM;
+	exec.fb_bo = vc4.fb_bo;
+	//??? 2-D array pointer, unsolved.
+	// exec.bo = (struct vc4_bo **)kmalloc(exec->bo_count *
+	// 				     sizeof(struct vc4_bo *));
+	if exec.bo.is_None() {
+		print!("vc4: Failed to allocate validated BO pointers\n");
+		E_NOMEM
 	}
 
-	handles = (uint32_t *)kmalloc(exec->bo_count, sizeof(uint32_t));
-	if (!handles) {
-		ret = -E_NOMEM;
-		kprintf("vc4: Failed to allocate incoming GEM handles\n");
-		goto fail;
+	// handles = (uint32_t *)kmalloc(exec->bo_count, sizeof(uint32_t));
+	let mut handles = vec![0; exec.bo_count];
+	if handles.is_None() {
+		print!("vc4: Failed to allocate incoming GEM handles\n");
+		E_NOMEM
 	}
 
-	if (!copy_from_user(mm, handles, (uintptr_t)exec.args.bo_handles,
-			    exec->bo_count * sizeof(uint32_t), 0)) {
-		ret = -E_FAULT;
-		kprintf("vc4: Failed to copy in GEM handles\n");
-		goto fail;
+	if copy_from_user(mm, handles, exec.args.bo_handles, exec->bo_count * core::mem::size_of::<u32>(), 0) == 0 {
+		print!("vc4: Failed to copy in GEM handles\n");
+		E_FAULT
 	}
 
-	for (i = 0; i < exec->bo_count; i++) {
-		struct vc4_bo *bo = vc4_lookup_bo(dev, handles[i]);
-		if (!bo) {
-			kprintf("vc4: Failed to look up GEM BO %d: %d\n", i,
-				handles[i]);
-			ret = -E_INVAL;
-			goto fail;
+	for i in 0..exec.bo_count {
+		let bo = vc4_lookup_bo(&dev, handles[i]);
+		if bo.is_None() {
+			print!("vc4: Failed to look up GEM BO %d: %d\n", i, handles[i]);
+			E_INVAL
 		}
-		exec->bo[i] = bo;
+		exec.bo[i] = bo;
 	}
 
-fail:
-	kfree(handles);
-	return ret;
+	0//???should be Ok(0)?
 }
 
-static int vc4_get_bcl(dev: &mut device, exec: &mut vc4_exec_info)
+pub fn vc4_get_bcl(dev: &mut device, exec: &mut vc4_exec_info) -> i32
 {
-	struct drm_vc4_submit_cl *args = exec->args;
+	// struct drm_vc4_submit_cl *args = exec->args;
 	void *temp = NULL;
 	void *bin;
-	int ret = 0;
-	struct mm_struct *mm = current->mm;
-	assert(mm);
+	assert!(!current.mm.is_None());
 
-	uint32_t bin_offset = 0;
-	uint32_t shader_rec_offset =
-		ROUNDUP(bin_offset + args->bin_cl_size, 16);
-	uint32_t uniforms_offset = shader_rec_offset + args->shader_rec_size;
-	uint32_t exec_size = uniforms_offset + args->uniforms_size;
-	uint32_t temp_size = exec_size + (sizeof(struct vc4_shader_state) *
-					  args->shader_rec_count);
-	struct vc4_bo *bo;
+	let bin_offset = 0u32;
+	let shader_rec_offset = ROUNDUP(bin_offset + exec.args.bin_cl_size, 16) as u32;
+	let uniforms_offset = shader_rec_offset + exec.args.shader_rec_size as u32;
+	let exec_size = uniforms_offset + exec.args.uniforms_size;
+	let temp_size = exec_size + (core::mem::size_of<vc4_shader_state>() * exec.args.shader_rec_count);
 
-	if (shader_rec_offset < args->bin_cl_size ||
-	    uniforms_offset < shader_rec_offset ||
-	    exec_size < uniforms_offset ||
-	    args->shader_rec_count >=
-		    ((~0U) / sizeof(struct vc4_shader_state)) ||
-	    temp_size < exec_size) {
-		kprintf("vc4: overflow in exec arguments\n");
-		ret = -E_INVAL;
-		goto fail;
+	if (shader_rec_offset < exec.args.bin_cl_size || uniforms_offset < shader_rec_offset || exec_size < uniforms_offset || exec.args.shader_rec_count >= ((!0U) / core::mem::size_of<vc4_shader_state>) || temp_size < exec_size) {
+		print!("vc4: overflow in exec arguments\n");
+		E_INVAL
 	}
 
-	temp = (void *)kmalloc(temp_size);
-	if (!temp) {
-		kprintf("vc4: Failed to allocate storage for copying "
-			"in bin/render CLs.\n");
-		ret = -E_NOMEM;
-		goto fail;
-	}
-	bin = temp + bin_offset;
-	exec->shader_rec_u = temp + shader_rec_offset;
-	exec->shader_state = temp + exec_size;
-	exec->shader_state_size = args->shader_rec_count;
+	//??? allocate a piece of memory for some reason,
+	// such operation may not be suitable in rust
+	// temp = (void *)kmalloc(temp_size);
+	// if (!temp) {
+	// 	print!("vc4: Failed to allocate storage for copying "
+	// 		"in bin/render CLs.\n");
+	// 	ret = -E_NOMEM;
+	// 	goto fail;
+	// }
+	// bin = temp + bin_offset;
+	// exec->shader_rec_u = temp + shader_rec_offset;
+	// exec->shader_state = temp + exec_size;
+	// exec->shader_state_size = exec.args.shader_rec_count;
 
-	if (args->bin_cl_size &&
-	    !copy_from_user(mm, bin, (uintptr_t)args->bin_cl, args->bin_cl_size,
-			    0)) {
-		ret = -E_FAULT;
-		goto fail;
-	}
-
-	if (args->shader_rec_size &&
-	    !copy_from_user(mm, exec->shader_rec_u, (uintptr_t)args->shader_rec,
-			    args->shader_rec_size, 0)) {
-		ret = -E_FAULT;
-		goto fail;
+	if (exec.args.bin_cl_size != 0 && !copy_from_user(current.mm, bin, exec.args.bin_cl, exec.args.bin_cl_size, 0)) {
+		E_FAULT
 	}
 
-	bo = vc4_bo_create(dev, exec_size, VC4_BO_TYPE_BCL);
-	if (bo == NULL) {
-		kprintf("vc4: Couldn't allocate BO for binning\n");
-		ret = -E_NOMEM;
-		goto fail;
+	if (exec.args.shader_rec_size && !copy_from_user(current.mm, exec->shader_rec_u, (uintptr_t)exec.args.shader_rec, exec.args.shader_rec_size, 0)) {
+		E_FAULT
 	}
-	exec->exec_bo = bo;
 
-	list_add_before(&exec->unref_list, &exec->exec_bo->unref_head);
+	let mut bo = vc4_bo_create(dev, exec_size, VC4_BO_TYPE_BCL);
+	if bo.is_None() {
+		print!("vc4: Couldn't allocate BO for binning\n");
+		E_NOMEM
+	}
+	exec.exec_bo = &bo;
 
-	exec->ct0ca = exec->exec_bo->paddr + bin_offset;
+	list_add_before(&exec.unref_list, &exec.exec_bo.unref_head);
 
-	exec->bin_u = bin;
+	exec.ct0ca = exec.exec_bo.paddr + bin_offset;
 
-	exec->shader_rec_v = exec->exec_bo->vaddr + shader_rec_offset;
-	exec->shader_rec_p = exec->exec_bo->paddr + shader_rec_offset;
-	exec->shader_rec_size = args->shader_rec_size;
+	exec.bin_u = bin;
 
+	exec.shader_rec_v = exec.exec_bo.vaddr + shader_rec_offset;
+	exec.shader_rec_p = exec.exec_bo.paddr + shader_rec_offset;
+	exec.shader_rec_size = exec.args.shader_rec_size;
+
+	let mut ret = 0i32;
 	ret = vc4_validate_bin_cl(dev, exec->exec_bo->vaddr + bin_offset, bin,
 				  exec);
-	if (ret)
-		goto fail;
+	if ret != 0
+		ret
 
 	ret = vc4_validate_shader_recs(dev, exec);
-	if (ret)
-		goto fail;
+	if ret != 0
+		ret
 
-fail:
-	kfree(temp);
-	return ret;
+	ret
 }
 
 pub fn vc4_complete_exec(dev: &mut device, exec: &mut vc4_exec_info)
@@ -284,7 +261,7 @@ int vc4_submit_cl_ioctl(dev: &mut device, void *data)
 
 	exec = (struct vc4_exec_info *)kmalloc(sizeof(struct vc4_exec_info));
 	if (!exec) {
-		kprintf("vc4: malloc failure on exec struct\n");
+		print!("vc4: malloc failure on exec struct\n");
 		return -E_NOMEM;
 	}
 
@@ -296,7 +273,7 @@ int vc4_submit_cl_ioctl(dev: &mut device, void *data)
 	if (ret)
 		goto fail;
 
-	if (exec->args->bin_cl_size != 0) {
+	if exec.args.bin_cl_size != 0 {
 		ret = vc4_get_bcl(dev, exec);
 		if (ret)
 			goto fail;

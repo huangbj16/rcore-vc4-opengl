@@ -252,15 +252,15 @@ pub fn vc4_probe(mut dev: &mut device) -> i32{
 
 	// The blob now has this nice handy call which powers up the v3d pipeline.
 	if (ret = mbox_qpu_enable(1)) != 0 {
-		printf!("VC4: cannot enable qpu.\n");
-		printf!("VideoCore IV GPU failed to initialize.\n");
+		print!("VC4: cannot enable qpu.\n");
+		print!("VideoCore IV GPU failed to initialize.\n");
 		ret
 	}
 
 	if V3D_READ(V3D_IDENT0) != V3D_EXPECTED_IDENT0 {
-		printf!("VC4: V3D_IDENT0 read 0x{%08x} instead of 0x{%08x}\n",
+		print!("VC4: V3D_IDENT0 read 0x{%08x} instead of 0x{%08x}\n",
 			V3D_READ(V3D_IDENT0), V3D_EXPECTED_IDENT0);
-		printf!("VideoCore IV GPU failed to initialize.\n");
+		print!("VideoCore IV GPU failed to initialize.\n");
 		EINVAL
 	}
 
@@ -271,17 +271,17 @@ pub fn vc4_probe(mut dev: &mut device) -> i32{
 	bo_map_init(vc4.handle_bo_map);
 
 	if fb_check() && (ret = vc4_bind_fb_bo(dev)) != 0 {
-		printf!("VC4: cannot bind framebuffer bo.\n");
-		printf!("VideoCore IV GPU failed to initialize.\n");
+		print!("VC4: cannot bind framebuffer bo.\n");
+		print!("VideoCore IV GPU failed to initialize.\n");
 		ret
 	}
 	if (ret = vc4_allocate_bin_bo(dev))!=0 {
-		printf!("VC4: cannot alloc bin bo.\n");
-		printf!("VideoCore IV GPU failed to initialize.\n");
+		print!("VC4: cannot alloc bin bo.\n");
+		print!("VideoCore IV GPU failed to initialize.\n");
 		ret
 	}
 
-	printf!("VideoCore IV GPU initialized.\n");
+	print!("VideoCore IV GPU initialized.\n");
 	ret
 
 //	goto out;
@@ -367,17 +367,17 @@ pub fn dev_init_vc4() -> i32
 	let mut ret;
 	if (node = dev_create_inode()).is_none() {
 		ret = E_NODEV;
-		printf!("vc4: dev_create_node failed: {%e}\n", ret);
+		print!("vc4: dev_create_node failed: {%e}\n", ret);
 		ret
 	}
 
 	if (ret = vc4_device_init(vop_info(node, device))) != 0 {
-		printf!("vc4: vc4_device_init failed: {%e}\n", ret);
+		print!("vc4: vc4_device_init failed: {%e}\n", ret);
 		dev_kill_inode(&mut node);
 		ret
 	}
 	if (ret = vfs_add_dev("gpu0", node, 0)) != 0 {
-		kprintf("vc4: vfs_add_dev failed: {%e}\n", ret);
+		print!("vc4: vfs_add_dev failed: {%e}\n", ret);
 		dev_kill_inode(&mut node);
 		ret
 	}
