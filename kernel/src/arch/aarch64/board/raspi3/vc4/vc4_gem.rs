@@ -224,23 +224,25 @@ pub fn vc4_get_bcl(dev: &mut device, exec: &mut vc4_exec_info) -> i32
 	ret
 }
 
-pub fn vc4_complete_exec(dev: &mut device, exec: &mut vc4_exec_info)
-{
-	struct vc4_dev *vc4 = to_vc4_dev(dev);
+//??? this function is used to free memory,
+//may unnecessary in rust
+// pub fn vc4_complete_exec(dev: &mut device, exec: &mut vc4_exec_info)
+// {
+// 	// struct vc4_dev *vc4 = to_vc4_dev(dev);
 
-	if (exec->bo) {
-		kfree(exec->bo);
-	}
+// 	if exec.bo.is_None() {
+// 		kfree(exec->bo);
+// 	}
 
-	while (!list_empty(&exec->unref_list)) {
-		list_entry_t *le = list_next(&exec->unref_list);
-		struct vc4_bo *bo = le2bo(le, unref_head);
-		list_del(&bo->unref_head);
-		vc4_bo_destroy(dev, bo);
-	}
+// 	while (!list_empty(&exec->unref_list)) {
+// 		list_entry_t *le = list_next(&exec->unref_list);
+// 		struct vc4_bo *bo = le2bo(le, unref_head);
+// 		list_del(&bo->unref_head);
+// 		vc4_bo_destroy(dev, bo);
+// 	}
 
-	kfree(exec);
-}
+// 	kfree(exec);
+// }
 
 /**
  * vc4_submit_cl_ioctl() - Submits a job (frame) to the VC4.
@@ -253,48 +255,50 @@ pub fn vc4_complete_exec(dev: &mut device, exec: &mut vc4_exec_info)
  * to the framebuffer described in the ioctl, using the command lists
  * that the 3D engine's binner will produce.
  */
-int vc4_submit_cl_ioctl(dev: &mut device, void *data)
+int vc4_submit_cl_ioctl(dev: &mut device, args: &mut drm_vc4_submit_cl)
 {
-	struct drm_vc4_submit_cl *args = data;
-	exec: &mut vc4_exec_info;
+	// struct drm_vc4_submit_cl *args = data;
+	let mut exec = vc4_exec_info;
 	int ret = 0;
 
-	exec = (struct vc4_exec_info *)kmalloc(sizeof(struct vc4_exec_info));
-	if (!exec) {
+	// exec = (struct vc4_exec_info *)kmalloc(sizeof(struct vc4_exec_info));
+	if exec.is_None() {
 		print!("vc4: malloc failure on exec struct\n");
-		return -E_NOMEM;
+		E_NOMEM
 	}
 
-	memset(exec, 0, sizeof(struct vc4_exec_info));
-	exec->args = args;
-	list_init(&exec->unref_list);
+	//??? memset unnecessary?
+	// memset(exec, 0, sizeof(struct vc4_exec_info));
+	exec.args = &args;
+	list_init(&exec.unref_list);
 
 	ret = vc4_cl_lookup_bos(dev, exec);
-	if (ret)
-		goto fail;
-
+	if ret != 0{
+		vc4_complete_exec(dev, &exec);
+		ret
+	}
 	if exec.args.bin_cl_size != 0 {
 		ret = vc4_get_bcl(dev, exec);
-		if (ret)
-			goto fail;
+		if ret != 0 {
+			vc4_complete_exec(dev, &exec);
+			ret
+		}
 	} else {
 		exec->ct0ca = 0;
 		exec->ct0ea = 0;
 	}
 
-	ret = vc4_get_rcl(dev, exec);
-	if (ret)
-		goto fail;
+	ret = vc4_get_rcl(dev, &exec);
+	if ret != 0 {
+		vc4_complete_exec(dev, &exec);
+		ret
+	}
 
 	/* Clear this out of the struct we'll be putting in the queue,
 	 * since it's part of our stack.
 	 */
-	exec->args = NULL;
-
-	vc4_queue_submit(dev, exec);
-
-fail:
-	vc4_complete_exec(dev, exec);
-
-	return ret;
+	exec.args = Option<None>;
+	vc4_queue_submit(dev, &exec);
+	vc4_complete_exec(dev, &exec);
+	ret
 }
