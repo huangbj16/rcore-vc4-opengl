@@ -70,12 +70,12 @@ pub fn validate_gl_array_primitive(dev: & device, exec: &mut vc4_exec_info, vali
 	/* Check overflow condition */
 	if (exec.shader_state_count == 0) {
 		print!("vc4: shader state must precede primitives\n");
-		-E_INVAL
+		E_INVAL
 	}
 
 	if (length + base_index < length) {
 		print!("vc4: primitive vertex count overflow\n");
-		-E_INVAL
+		E_INVAL
 	}
 	let max_index = length + base_index - 1;
 	let mut shader_state = &exec.shader_state[exec.shader_state_count - 1];
@@ -92,7 +92,7 @@ pub fn validate_nv_shader_state(dev: & device, exec: &mut vc4_exec_info, validat
 
 	if (i >= exec.shader_state_size) {
 		print!("vc4: More requests for shader states than declared\n");
-		-E_INVAL
+		E_INVAL
 	}
 
 	exec.shader_state[i].addr = get_unaligned_32(&untrusted);
@@ -150,10 +150,14 @@ validate_tile_binning_config(dev: & device, exec: &mut vc4_exec_info, validated:
 
 validate_gem_handles(dev: & device, exec: &mut vc4_exec_info, validated: usize, untrusted: usize)  -> i32
 {
-	memcpy(exec.bo_index, untrusted, sizeof(exec.bo_index));
-	0;
+	// memcpy(exec.bo_index, untrusted, sizeof(exec.bo_index));
+	exec.bo_index = untrusted as [u32;5];
+	0
 }
 
+
+//???weird macro rules......
+/*
 #define ARRAY_SIZE(arr) (sizeof(arr) / sizeof((arr)[0]))
 
 #define VC4_DEFINE_PACKET(packet, func)                                        \
@@ -204,30 +208,30 @@ const cmd_info {
 
 	VC4_DEFINE_PACKET(VC4_PACKET_GEM_HANDLES, validate_gem_handles),
 };
+*/
 
-vc4_validate_bin_cl(device *dev, void *validated, void *unvalidated, exec: &mut vc4_exec_info)  -> i32
+vc4_validate_bin_cl(dev: & device, validated: usize, unvalidated: usize, exec: &mut vc4_exec_info) -> i32
 {
 	let len = exec.args.bin_cl_size;
-	let dst_offset = 0;
-	let src_offset = 0;
+	let mut dst_offset = 0;
+	let mut src_offset = 0;
 
-	while (src_offset < len) {
-		void *dst_pkt = validated + dst_offset;
-		void *src_pkt = unvalidated + src_offset;
+	while src_offset < len {
+		let mut dst_pkt = validated + dst_offset;
+		let mut src_pkt = unvalidated + src_offset;
+		//???hard
 		uint8_t cmd = *(uint8_t *)src_pkt;
 		const cmd_info *info;
 
-		if (cmd >= ARRAY_SIZE(cmd_info)) {
-			print!("vc4: 0x{08x}: packet {} out of bounds\n",
-				src_offset, cmd);
-			-E_INVAL
+		if cmd >= ARRAY_SIZE(cmd_info) {
+			print!("vc4: 0x{08x}: packet {} out of bounds\n", src_offset, cmd);
+			E_INVAL
 		}
 
 		info = &cmd_info[cmd];
 		if (!info.name) {
-			print!("vc4: 0x{08x}: packet {} invalid\n", src_offset,
-				cmd);
-			-E_INVAL
+			print!("vc4: 0x{08x}: packet {} invalid\n", src_offset, cmd);
+			E_INVAL
 		}
 
 		if (src_offset + info.len > len) {
@@ -235,7 +239,7 @@ vc4_validate_bin_cl(device *dev, void *validated, void *unvalidated, exec: &mut 
 				"exceeds bounds (0x{08x})\n",
 				src_offset, cmd, info.name, info.len,
 				src_offset + len);
-			-E_INVAL
+			E_INVAL
 		}
 
 		if (cmd != VC4_PACKET_GEM_HANDLES)
@@ -245,7 +249,7 @@ vc4_validate_bin_cl(device *dev, void *validated, void *unvalidated, exec: &mut 
 		    info.func(dev, exec, dst_pkt + 1, src_pkt + 1)) {
 			print!("vc4: 0x{08x}: packet {} ({}) failed to validate\n",
 				src_offset, cmd, info.name);
-			-E_INVAL
+			E_INVAL
 		}
 
 		src_offset += info.len;
@@ -260,24 +264,22 @@ vc4_validate_bin_cl(device *dev, void *validated, void *unvalidated, exec: &mut 
 
 	exec.ct0ea = exec.ct0ca + dst_offset;
 
-	0;
+	0
 }
 
-validate_nv_shader_rec(device *dev, exec: &mut vc4_exec_info, vc4_shader_state *state)  -> i32
+validate_nv_shader_rec(dev: & device, exec: &mut vc4_exec_info, state: & vc4_shader_state)  -> i32
 {
 	let *src_handles;
-	void *pkt_u, *pkt_v;
 	let shader_reloc_count = 1;
 	vc4_bo *bo[shader_reloc_count];
 	let nr_relocs = 3, packet_size = 16;
 	int i;
 
-	nr_relocs = shader_reloc_count + 2;
 	if (nr_relocs * 4 > exec.shader_rec_size) {
 		print!("vc4: overflowed shader recs reading {} handles "
 			"from {} bytes left\n",
 			nr_relocs, exec.shader_rec_size);
-		-E_INVAL
+		E_INVAL
 	}
 	src_handles = exec.shader_rec_u;
 	exec.shader_rec_u += nr_relocs * 4;
@@ -287,10 +289,10 @@ validate_nv_shader_rec(device *dev, exec: &mut vc4_exec_info, vc4_shader_state *
 		print!("vc4: overflowed shader recs copying {}b packet "
 			"from {} bytes left\n",
 			packet_size, exec.shader_rec_size);
-		-E_INVAL
+		E_INVAL
 	}
-	pkt_u = exec.shader_rec_u;
-	pkt_v = exec.shader_rec_v;
+	let pkt_u = exec.shader_rec_u;
+	let pkt_v = exec.shader_rec_v;
 	memcpy(pkt_v, pkt_u, packet_size);
 	exec.shader_rec_u += packet_size;
 	exec.shader_rec_v += packet_size;
@@ -299,9 +301,9 @@ validate_nv_shader_rec(device *dev, exec: &mut vc4_exec_info, vc4_shader_state *
 	for (i = 0; i < nr_relocs; i++) {
 		bo[i] = vc4_use_bo(exec, src_handles[i]);
 		if (!bo[i])
-			-E_INVAL
+			E_INVAL
 	}
-
+	//???
 	uint8_t stride = *(uint8_t *)(pkt_u + 1);
 	let fs_offset = get_unaligned_32(pkt_u + 4);
 	let uniform_offset = get_unaligned_32(pkt_u + 8);
@@ -317,7 +319,7 @@ validate_nv_shader_rec(device *dev, exec: &mut vc4_exec_info, vc4_shader_state *
 			print!("vc4: primitives use index {} out of "
 				"supplied {}\n",
 				state.max_index, max_index);
-			-E_INVAL
+			E_INVAL
 		}
 	}
 
@@ -326,16 +328,16 @@ validate_nv_shader_rec(device *dev, exec: &mut vc4_exec_info, vc4_shader_state *
 	0;
 }
 
-vc4_validate_shader_recs(device *dev, exec: &mut vc4_exec_info)  -> i32
+vc4_validate_shader_recs(dev: & device, exec: &mut vc4_exec_info)  -> i32
 {
 	let i;
 	let mut ret = 0i32;
 
-	for (i = 0; i < exec.shader_state_count; i++) {
+	for i in 0..=exec.shader_state_count {
 		ret = validate_nv_shader_rec(dev, exec, &exec.shader_state[i]);
-		if (ret)
-			ret;
+		if ret != 0
+			ret
 	}
 
-	ret;
+	ret
 }
