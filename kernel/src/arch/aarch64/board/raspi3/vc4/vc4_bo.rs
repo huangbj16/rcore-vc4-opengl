@@ -77,21 +77,23 @@ pub fn vc4_bo_destroy(dev: device, bo: &mut vc4_bo)
 	// memset(bo, 0, sizeof(struct vc4_bo));
 }
 
-pub fn vc4_lookup_bo(dev: & device, handle: u32) -> &mut vc4_bo
-{
-	let mut vc4 = to_vc4_dev(dev);
-	let mut bo: &mut vc4_bo;
+impl vc4_dev {
+	pub fn vc4_lookup_bo(&self, handle: u32) -> &mut vc4_bo
+	{
+		let mut vc4 = to_vc4_dev(dev);
+		let mut bo: &mut vc4_bo;
 
-	if handle >= VC4_DEV_BO_NENTRY {
-		None
+		if handle >= VC4_DEV_BO_NENTRY {
+			None
+		}
+
+		bo = &mut vc4.handle_bo_map[handle];
+		if bo->handle != handle || !bo->size {
+			None
+		}
+
+		bo
 	}
-
-	bo = &mut vc4.handle_bo_map[handle];
-	if bo->handle != handle || !bo->size {
-		None
-	}
-
-	bo
 }
 
 pub fn vc4_create_bo_ioctl(dev: &mut device, args: &mut drm_vc4_create_bo) -> i32

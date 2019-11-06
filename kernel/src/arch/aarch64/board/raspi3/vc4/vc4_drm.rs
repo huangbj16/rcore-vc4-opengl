@@ -1,8 +1,3 @@
-//#ifndef VC4_DRM_H
-//#define VC4_DRM_H
-
-//#include <types.h>
-
 pub const DRM_IOCTL_VC4_SUBMIT_CL                         : usize = 0x00;
 pub const DRM_IOCTL_VC4_WAIT_SEQNO                        : usize = 0x01;
 pub const DRM_IOCTL_VC4_WAIT_BO                           : usize = 0x02;

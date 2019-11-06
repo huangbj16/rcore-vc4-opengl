@@ -26,6 +26,7 @@ mod pseudo;
 mod random;
 mod stdio;
 pub mod vga;
+pub mod gpu;
 
 // Hard link user programs
 #[cfg(feature = "link_user")]

@@ -108,50 +108,53 @@ pub fn vc4_queue_submit(dev: &mut device, exec: &mut vc4_exec_info)
  * Note that this function doesn't need to unreference the BOs on
  * failure, because that will happen at vc4_complete_exec() time.
  */
-pub fn vc4_cl_lookup_bos(dev: &mut device, exec: &mut vc4_exec_info) -> i32
-{
-	let vc4 = to_vc4_dev(&dev);
-	// struct drm_vc4_submit_cl *args = exec->args;
-	// struct mm_struct *mm = current->mm;
-	assert!(!current.mm.is_None());
 
-	exec.bo_count = exec.args.bo_handle_count;
+impl vc4_dev {
+	pub fn vc4_cl_lookup_bos(&self, exec: &mut vc4_exec_info) -> i32
+	{
+		exec.bo_count = exec.args.bo_handle_count;
 
-	if exec.bo_count == 0 {
-		0
-	}
-
-	exec.fb_bo = vc4.fb_bo;
-	//??? 2-D array pointer, unsolved.
-	// exec.bo = (struct vc4_bo **)kmalloc(exec->bo_count *
-	// 				     sizeof(struct vc4_bo *));
-	if exec.bo.is_None() {
-		print!("vc4: Failed to allocate validated BO pointers\n");
-		E_NOMEM
-	}
-
-	// handles = (uint32_t *)kmalloc(exec->bo_count, sizeof(uint32_t));
-	let mut handles = vec![0; exec.bo_count];
-	if handles.is_None() {
-		print!("vc4: Failed to allocate incoming GEM handles\n");
-		E_NOMEM
-	}
-
-	if copy_from_user(mm, handles, exec.args.bo_handles, exec->bo_count * core::mem::size_of::<u32>(), 0) == 0 {
-		print!("vc4: Failed to copy in GEM handles\n");
-		E_FAULT
-	}
-
-	for i in 0..exec.bo_count {
-		let bo = vc4_lookup_bo(&dev, handles[i]);
-		if bo.is_None() {
-			print!("vc4: Failed to look up GEM BO %d: %d\n", i, handles[i]);
-			E_INVAL
+		if exec.bo_count == 0 {
+			0
 		}
-		exec.bo[i] = bo;
-	}
 
-	0//???should be Ok(0)?
+		exec.fb_bo = self.fb_bo;
+		//??? 2-D array pointer, unsolved.
+		// exec.bo = (struct vc4_bo **)kmalloc(exec->bo_count *
+		// 				     sizeof(struct vc4_bo *));
+		exec.bo.push(Box::new(vc4_bo {
+			size: 0,
+			handle: 0,
+			paddr: 0,
+			vaddr: 0,
+			bo_type: VC4_BO_TYPE_FB,
+			//TODO
+			//unref_head
+		}))
+
+		let mut handles = Vec::new();
+
+		let addr = exec.args.bo_handles;
+		for i in 0..exec.bo_count {
+			let handle = copy_from_user(addr as *const u32).ok_or(SysError::EFAULT);
+			handles.push(handle);
+			// if copy_from_user(mm, handles, exec.args.bo_handles, exec->bo_count * core::mem::size_of::<u32>(), 0) == 0 {
+			// 	print!("vc4: Failed to copy in GEM handles\n");
+			// 	E_FAULT
+			// }
+		}
+
+		for i in 0..exec.bo_count {
+			let bo = vc4_lookup_bo(handles[i]);
+			if bo.is_None() {
+				print!("vc4: Failed to look up GEM BO %d: %d\n", i, handles[i]);
+				E_INVAL
+			}
+			exec.bo[i] = bo;
+		}
+
+		0//???should be Ok(0)?
+	}
 }
 
 pub fn vc4_get_bcl(dev: &mut device, exec: &mut vc4_exec_info) -> i32
@@ -255,50 +258,45 @@ pub fn vc4_get_bcl(dev: &mut device, exec: &mut vc4_exec_info) -> i32
  * to the framebuffer described in the ioctl, using the command lists
  * that the 3D engine's binner will produce.
  */
-int vc4_submit_cl_ioctl(dev: &mut device, args: &mut drm_vc4_submit_cl)
-{
-	// struct drm_vc4_submit_cl *args = data;
-	let mut exec = vc4_exec_info;
-	int ret = 0;
 
-	// exec = (struct vc4_exec_info *)kmalloc(sizeof(struct vc4_exec_info));
-	if exec.is_None() {
-		print!("vc4: malloc failure on exec struct\n");
-		E_NOMEM
-	}
+impl vc4_dev {
+	fn vc4_submit_cl_ioctl(&self, data: usize)
+	{	
+		let mut exec = vc4_exec_info::new(data);
 
-	//??? memset unnecessary?
-	// memset(exec, 0, sizeof(struct vc4_exec_info));
-	exec.args = &args;
-	list_init(&exec.unref_list);
+		int ret = 0;
 
-	ret = vc4_cl_lookup_bos(dev, exec);
-	if ret != 0{
-		vc4_complete_exec(dev, &exec);
-		ret
-	}
-	if exec.args.bin_cl_size != 0 {
-		ret = vc4_get_bcl(dev, exec);
+		//TODO
+		list_init(&exec.unref_list);
+
+		ret = vc4_cl_lookup_bos(&exec);
+		if ret != 0{
+			vc4_complete_exec(dev, &exec);
+			ret
+		}
+		if exec.args.bin_cl_size != 0 {
+			ret = vc4_get_bcl(dev, exec);
+			if ret != 0 {
+				vc4_complete_exec(dev, &exec);
+				ret
+			}
+		} else {
+			exec->ct0ca = 0;
+			exec->ct0ea = 0;
+		}
+
+		ret = vc4_get_rcl(dev, &exec);
 		if ret != 0 {
 			vc4_complete_exec(dev, &exec);
 			ret
 		}
-	} else {
-		exec->ct0ca = 0;
-		exec->ct0ea = 0;
-	}
 
-	ret = vc4_get_rcl(dev, &exec);
-	if ret != 0 {
+		/* Clear this out of the struct we'll be putting in the queue,
+		 * since it's part of our stack.
+		 */
+		exec.args = Option<None>;
+		vc4_queue_submit(dev, &exec);
 		vc4_complete_exec(dev, &exec);
 		ret
 	}
-
-	/* Clear this out of the struct we'll be putting in the queue,
-	 * since it's part of our stack.
-	 */
-	exec.args = Option<None>;
-	vc4_queue_submit(dev, &exec);
-	vc4_complete_exec(dev, &exec);
-	ret
 }

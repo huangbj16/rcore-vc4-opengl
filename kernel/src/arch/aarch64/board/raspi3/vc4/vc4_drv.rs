@@ -12,7 +12,7 @@ use vc4_regs::*;
 use rcore_memory::PAGE_SIZE;
 use std::mem;
 use crate::syscall::SysError::*;
-//#include "bcm2708_fb.h"
+use vc4_drm::*;
 
 enum vc4_kernel_bo_type {
 	VC4_BO_TYPE_FB,
@@ -31,6 +31,8 @@ struct vc4_bo {
 	/* List entry for the BO's position in either
 	 * vc4_exec_info->unref_list or vc4_dev->bo_cache.time_list
 	 */
+
+	 //TODO
 	unref_head: list_entry_t,
 }
 
@@ -42,6 +44,7 @@ struct vc4_dev {
 	 * powers down.
 	 */
 	bin_bo: usize,//struct vc4_bo *
+	bin_bo: Arc<Vec<vc4_bo>>;
 
 	/* Size of blocks allocated within bin_bo. */
 	bin_alloc_size: u32,
@@ -81,19 +84,20 @@ struct vc4_exec_info {
 	/* This is the array of BOs that were looked up at the start of exec.
 	 * Command validation will use indices into this array.
 	 */
-	bo: usize,//struct vc4_bo **
+	bo: Vec<Box<vc4_bo>>,//struct vc4_bo **
 	fb_bo: usize,//struct vc4_bo *
 	bo_count: u32,
 
 	/* List of other BOs used in the job that need to be released
 	 * once the job is complete.
 	 */
-	unref_list: list_entry_t,
+	// TODO
+	//unref_list: list_entry_t,
 
 	/* Current unvalidated indices into @bo loaded by the non-hardware
 	 * VC4_PACKET_GEM_HANDLES.
 	 */
-	bo_index: [u32; 5],
+	bo_index: [u32; 2],
 
 	/* This is the BO where we store the validated command lists, shader
 	 * records, and uniforms.
@@ -135,6 +139,39 @@ struct vc4_exec_info {
 	shader_rec_v: usize,
 	shader_rec_p: u32,
 	shader_rec_size: u32,
+}
+
+impl vc4_exec_info {
+	fn new(arg: usize) -> vc4_exec_info {
+		vc4_exec_info {
+			args: arg,
+			bo: Vec::new(),
+			fb_bo: 0,//struct vc4_bo *
+			bo_count: 0,
+
+			bo_index: [0, 0],
+			
+			exec_bo: 0,//struct vc4_bo *
+			shader_state: 0,//struct vc4_shader_state *
+			/** How many shader states the user declared they were using. */
+			shader_state_size: 0,
+			/** How many shader state records the validator has seen. */
+			shader_state_count: 0,
+
+			bin_tiles_x: 0,
+			bin_tiles_y: 0,
+			tile_alloc_offset: 0,
+			ct0ca: 0,
+			ct0ea: 0,
+			ct1ca: 0,
+			ct1ea: 0,
+			bin_u: 0,
+			shader_rec_u: 0,
+			shader_rec_v: 0,
+			shader_rec_p: 0,
+			shader_rec_size: 0,
+		}
+	}
 }
 
 macro_rules! offset_of {
@@ -293,52 +330,26 @@ pub fn vc4_probe(mut dev: &mut device) -> i32{
 //	return ret;
 }
 
-pub fn vc4_gem_destroy()
-{
-	// TODO
-}
-
-pub fn vc4_open(dev: &mut device, open_flags: u32) -> i32
-{
-	return 0;
-}
-
-pub fn vc4_close(dev: &mut device) -> i32
-{
-	return 0;
-}
-
-pub fn vc4_ioctl(mut dev: &mut device, op: i32, data: usize) -> i32//void *data
-{
-	let mut vc4 = to_vc4_dev(dev);
-	if vc4.is_none():
-		ENODEV
-
-	let mut ret = 0;
-
-	match op {
-		DRM_IOCTL_VC4_SUBMIT_CL => {
-			ret = vc4_submit_cl_ioctl(dev, data);
-			break;
-		}
-		DRM_IOCTL_VC4_CREATE_BO => {
-			ret = vc4_create_bo_ioctl(dev, data);
-			break;
-		}
-		DRM_IOCTL_VC4_MMAP_BO => {
-			ret = vc4_mmap_bo_ioctl(dev, data);
-			break;
-		}
-		DRM_IOCTL_VC4_FREE_BO => {
-			ret = vc4_free_bo_ioctl(dev, data);
-			break;
-		}
-		_ => {
-			ret = EINVAL;
-			break;
+impl vc4_dev {
+	fn io_control(&self, op: u32, data: usize) -> Result<()> {
+		match op {
+			DRM_IOCTL_VC4_SUBMIT_CL => {
+				vc4_submit_cl_ioctl(data);
+			}
+			DRM_IOCTL_VC4_CREATE_BO => {
+				vc4_create_bo_ioctl(data);
+			}
+			DRM_IOCTL_VC4_MMAP_BO => {
+				vc4_mmap_bo_ioctl(data);
+			}
+			DRM_IOCTL_VC4_FREE_BO => {
+				vc4_free_bo_ioctl(data);
+			}
+			_ => {
+				Err(FsError::NotSupported)
+			}
 		}
 	}
-	ret
 }
 
 pub fn vc4_device_init(mut dev: &mut device) -> i32
