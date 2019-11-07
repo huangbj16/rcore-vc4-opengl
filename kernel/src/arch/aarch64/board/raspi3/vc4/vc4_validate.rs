@@ -11,14 +11,16 @@ use crate::syscall::SysError::*;
 // 		void *untrusted
 // dev: & device, exec: &mut vc4_exec_info, validated: usize, untrusted: usize
 
-pub fn vc4_use_bo(exec: &mut vc4_exec_info, hindex: u32) . &vc4_bo
-{
-	if (hindex >= exec.bo_count) {
-		print!("vc4: BO index {} greater than BO count {}\n", hindex, exec.bo_count);
-		Option<None>
-	}
+impl vc4_exec_info {
+	pub fn vc4_use_bo(&self, hindex: u32) -> &vc4_bo
+	{
+		if (hindex >= exec.bo_count) {
+			print!("vc4: BO index {} greater than BO count {}\n", hindex, exec.bo_count);
+			Option<None>
+		}
 
-	&exec.bo[hindex]
+		&exec.bo[hindex]
+	}
 }
 
 pub fn vc4_use_handle(exec: &mut vc4_exec_info, gem_handles_packet_index: u32) . & vc4_bo

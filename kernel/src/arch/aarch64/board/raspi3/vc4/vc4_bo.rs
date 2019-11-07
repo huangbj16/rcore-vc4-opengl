@@ -11,54 +11,51 @@ use crate::rcore_memory::PAGE_SIZE;
 // #include "vc4_drm.h"
 // #include "mailbox_property.h"
 
-pub fn vc4_bo_create(dev: &device, size: u32, bo_type: vc4_kernel_bo_type) -> &mut vc4_bo
-{
-	let vc4 = to_vc4_dev(dev);
+impl vc4_dev {
+	pub fn vc4_bo_create(&self, size: u32, bo_type: vc4_kernel_bo_type) -> Some(Arc<Mutex<vc4_bo>>)
+	{
+		if (bo_type == VC4_BO_TYPE_FB)
+			Some(self.fb_bo.clone())
 
-	if (bo_type == VC4_BO_TYPE_FB)
-		vc4.fb_bo
+		if size == 0:
+			None
 
-	if size == 0:
-		None
+		size = ROUNDUP(size, PAGE_SIZE);
 
-	size = ROUNDUP(size, PAGE_SIZE);
+		let Ok(handle) = mailbox::mem_alloc(size, PAGE_SIZE, MEM_FLAG_COHERENT | MEM_FLAG_ZERO) {
+			if handle >= VC4_DEV_BO_NENTRY {
+				println!("VC4: too many bo handles, VC4_DEV_BO_NENTRY = {%d}\n",
+					VC4_DEV_BO_NENTRY);
+				// goto free_mem;
+				mailbox::mem_free(handle);
+				None
+			}
 
-	let handle =
-		mbox_mem_alloc(size, PAGE_SIZE, MEM_FLAG_COHERENT | MEM_FLAG_ZERO);
-	if handle == 0 {
-		println!("VC4: unable to allocate memory with size {%08x}\n", size);
-		None
+			if let Ok(bus_addr) = mailbox::mem_lock(handle) {
+				let paddr = bus_to_phys(bus_addr);
+				let vaddr = memory::ioremap(paddr as usize, 0x800000, "bo");
+				let result = self.handle_bo_map.insert(handle, vc4_bo {
+																	size: size,
+																	handle: handle,
+																	paddr: paddr,
+																	vaddr: vaddr,
+																	bo_type: bo_type	
+																});
+				if let Some(bo) = self.handle_bo_map.get(&handle) {
+					bo.clone()
+				} else {
+					None
+				}
+			} else {
+				println!("VC4: unable to lock memory at handle {}", handle);
+				mailbox::mem_free(handle);
+				None
+			}
+		} else {
+			println!("VC4: unable to allocate memory with size {%08x}\n", size);
+			None
+		}
 	}
-	if handle >= VC4_DEV_BO_NENTRY {
-		println!("VC4: too many bo handles, VC4_DEV_BO_NENTRY = {%d}\n",
-			VC4_DEV_BO_NENTRY);
-		// goto free_mem;
-		mbox_mem_free(handle);
-		None
-	}
-
-	let bus_addr = mbox_mem_lock(handle);
-	if bus_addr == 0 {
-		println!("VC4: unable to lock memory at handle {%08x}\n", handle);
-		// goto free_mem;
-		mbox_mem_free(handle);
-		None
-	}
-
-	__boot_map_iomem(bus_addr, size, bus_addr);
-
-	let mut bo = vc4.handle_bo_map[handle];
-	bo.size = size;
-	bo.handle = handle;
-	bo.paddr = bus_addr;
-	bo.vaddr = bus_addr;
-	bo.bo_type = bo_type;
-	list_init(&bo.unref_head);
-
-	// printf!("vc4_bo_create: %08x %08x %08x %08x\n", bo->size, bo->handle,
-	// 	bo->paddr, bo->vaddr);
-
-	bo
 }
 
 pub fn vc4_bo_destroy(dev: device, bo: &mut vc4_bo)
@@ -78,21 +75,22 @@ pub fn vc4_bo_destroy(dev: device, bo: &mut vc4_bo)
 }
 
 impl vc4_dev {
-	pub fn vc4_lookup_bo(&self, handle: u32) -> &mut vc4_bo
+	pub fn vc4_lookup_bo(&self, handle: u32) -> Option<Arc<Mutex<vc4_bo>>>
 	{
-		let mut vc4 = to_vc4_dev(dev);
-		let mut bo: &mut vc4_bo;
-
 		if handle >= VC4_DEV_BO_NENTRY {
 			None
 		}
 
-		bo = &mut vc4.handle_bo_map[handle];
-		if bo->handle != handle || !bo->size {
-			None
+		if let Some(bo) = vc4.get(handle) {
+			if let Ok(bo_entry) = bo.lock() {
+				if bo_entry.handle != handle || bo_entry.size == 0 {
+					None
+				} else {
+					Some(bo.clone());
+				}
+			}
 		}
-
-		bo
+		None
 	}
 }
 

@@ -110,27 +110,18 @@ pub fn vc4_queue_submit(dev: &mut device, exec: &mut vc4_exec_info)
  */
 
 impl vc4_dev {
-	pub fn vc4_cl_lookup_bos(&self, exec: &mut vc4_exec_info) -> i32
+	pub fn vc4_cl_lookup_bos(&self, exec: &mut vc4_exec_info) -> Result<()>
 	{
 		exec.bo_count = exec.args.bo_handle_count;
 
 		if exec.bo_count == 0 {
-			0
+			Ok(())
 		}
 
 		exec.fb_bo = self.fb_bo;
 		//??? 2-D array pointer, unsolved.
 		// exec.bo = (struct vc4_bo **)kmalloc(exec->bo_count *
 		// 				     sizeof(struct vc4_bo *));
-		exec.bo.push(Box::new(vc4_bo {
-			size: 0,
-			handle: 0,
-			paddr: 0,
-			vaddr: 0,
-			bo_type: VC4_BO_TYPE_FB,
-			//TODO
-			//unref_head
-		}))
 
 		let mut handles = Vec::new();
 
@@ -138,93 +129,102 @@ impl vc4_dev {
 		for i in 0..exec.bo_count {
 			let handle = copy_from_user(addr as *const u32).ok_or(SysError::EFAULT);
 			handles.push(handle);
-			// if copy_from_user(mm, handles, exec.args.bo_handles, exec->bo_count * core::mem::size_of::<u32>(), 0) == 0 {
-			// 	print!("vc4: Failed to copy in GEM handles\n");
-			// 	E_FAULT
-			// }
 		}
 
 		for i in 0..exec.bo_count {
-			let bo = vc4_lookup_bo(handles[i]);
-			if bo.is_None() {
-				print!("vc4: Failed to look up GEM BO %d: %d\n", i, handles[i]);
-				E_INVAL
+			if let Some(bo) = vc4_lookup_bo(handles[i]) {
+				exec.bo.push(bo);
+			} else {
+				Err(FsError::InvalidParam)
 			}
-			exec.bo[i] = bo;
+		}
+		Ok(())
+	}
+
+	pub fn vc4_get_bcl(&self, exec: &mut vc4_exec_info) -> Result<()>
+	{
+		// struct drm_vc4_submit_cl *args = exec->args;
+
+		let bin_offset: u32 = 0;
+		let shader_rec_offset: u32 = ROUNDUP(bin_offset + exec.args.bin_cl_size, 16) as u32;
+		let uniforms_offset = shader_rec_offset + exec.args.shader_rec_size as u32;
+		let exec_size = uniforms_offset + exec.args.uniforms_size;
+		let temp_size = exec_size + (core::mem::size_of<vc4_shader_state>() * exec.args.shader_rec_count);
+
+		if (shader_rec_offset < exec.args.bin_cl_size || uniforms_offset < shader_rec_offset || exec_size < uniforms_offset || exec.args.shader_rec_count >= ((!0U) / core::mem::size_of<vc4_shader_state>) || temp_size < exec_size) {
+			print!("vc4: overflow in exec arguments\n");
+			Err(FsError::InvalidParam)
 		}
 
-		0//???should be Ok(0)?
+		//??? allocate a piece of memory for some reason,
+		// such operation may not be suitable in rust
+		// temp = (void *)kmalloc(temp_size);
+		// if (!temp) {
+		// 	print!("vc4: Failed to allocate storage for copying "
+		// 		"in bin/render CLs.\n");
+		// 	ret = -E_NOMEM;
+		// 	goto fail;
+		// }
+
+		let tmp = Vec<u8>::new();
+		bin = bin_offset;
+		exec->shader_rec_u = shader_rec_offset;
+		exec->shader_state = exec_size;
+		exec->shader_state_size = exec.args.shader_rec_count;
+
+		let mut temp: Vec<u8> = Vec::with_capacity(temp_size);
+
+		let baddr: usize = exec.args.bin_cl;
+		for i in 0..exec.args.bin_cl_size {
+			let vaddr = baddr + i;
+			if let Some(b) = copy_from_user(vaddr as *const u8) {
+				temp[bin + i] = b;
+			} else {
+				Err(FsError::EFAULT);
+			}
+		}
+
+		baddr = exec.args.shader_rec;
+		for i in 0..exec.args.shader_rec_size {
+			let vaddr = baddr + i;
+			if let Some(b) = copy_from_user(vaddr as *const u8) {
+				temp[exec->shader_rec_u + i] = b;
+			} else {
+				Err(FsError::EFAULT);
+			}
+		}
+
+		if let Some(bo) = vc4_bo_create(dev, exec_size, VC4_BO_TYPE_BCL) {
+			exec.exec_bo = bo.clone();
+
+			let exec_bo = bo.lock().unwrap();
+			exec.ct0ca = exec_bo.paddr + bin_offset;
+
+			//exec.bin_u = bin;
+
+			exec.shader_rec_v = exec_bo.vaddr + shader_rec_offset;
+			exec.shader_rec_p = exec_bo.paddr + shader_rec_offset;
+			exec.shader_rec_size = exec.args.shader_rec_size;
+
+			let mut ret = 0i32;
+			ret = vc4_validate_bin_cl(dev, exec->exec_bo->vaddr + bin_offset, bin,
+						  exec);
+			if ret != 0
+				ret
+
+			ret = vc4_validate_shader_recs(dev, exec);
+			if ret != 0
+				ret
+
+			ret
+		} else {
+			print!("vc4: Couldn't allocate BO for binning\n");
+			Err(FsError::E_NOMEM);
+		}
+
+		//TODO
+		list_add_before(&exec.unref_list, &exec.exec_bo.unref_head);
 	}
-}
-
-pub fn vc4_get_bcl(dev: &mut device, exec: &mut vc4_exec_info) -> i32
-{
-	// struct drm_vc4_submit_cl *args = exec->args;
-	void *temp = NULL;
-	void *bin;
-	assert!(!current.mm.is_None());
-
-	let bin_offset = 0u32;
-	let shader_rec_offset = ROUNDUP(bin_offset + exec.args.bin_cl_size, 16) as u32;
-	let uniforms_offset = shader_rec_offset + exec.args.shader_rec_size as u32;
-	let exec_size = uniforms_offset + exec.args.uniforms_size;
-	let temp_size = exec_size + (core::mem::size_of<vc4_shader_state>() * exec.args.shader_rec_count);
-
-	if (shader_rec_offset < exec.args.bin_cl_size || uniforms_offset < shader_rec_offset || exec_size < uniforms_offset || exec.args.shader_rec_count >= ((!0U) / core::mem::size_of<vc4_shader_state>) || temp_size < exec_size) {
-		print!("vc4: overflow in exec arguments\n");
-		E_INVAL
-	}
-
-	//??? allocate a piece of memory for some reason,
-	// such operation may not be suitable in rust
-	// temp = (void *)kmalloc(temp_size);
-	// if (!temp) {
-	// 	print!("vc4: Failed to allocate storage for copying "
-	// 		"in bin/render CLs.\n");
-	// 	ret = -E_NOMEM;
-	// 	goto fail;
-	// }
-	// bin = temp + bin_offset;
-	// exec->shader_rec_u = temp + shader_rec_offset;
-	// exec->shader_state = temp + exec_size;
-	// exec->shader_state_size = exec.args.shader_rec_count;
-
-	if (exec.args.bin_cl_size != 0 && !copy_from_user(current.mm, bin, exec.args.bin_cl, exec.args.bin_cl_size, 0)) {
-		E_FAULT
-	}
-
-	if (exec.args.shader_rec_size && !copy_from_user(current.mm, exec->shader_rec_u, (uintptr_t)exec.args.shader_rec, exec.args.shader_rec_size, 0)) {
-		E_FAULT
-	}
-
-	let mut bo = vc4_bo_create(dev, exec_size, VC4_BO_TYPE_BCL);
-	if bo.is_None() {
-		print!("vc4: Couldn't allocate BO for binning\n");
-		E_NOMEM
-	}
-	exec.exec_bo = &bo;
-
-	list_add_before(&exec.unref_list, &exec.exec_bo.unref_head);
-
-	exec.ct0ca = exec.exec_bo.paddr + bin_offset;
-
-	exec.bin_u = bin;
-
-	exec.shader_rec_v = exec.exec_bo.vaddr + shader_rec_offset;
-	exec.shader_rec_p = exec.exec_bo.paddr + shader_rec_offset;
-	exec.shader_rec_size = exec.args.shader_rec_size;
-
-	let mut ret = 0i32;
-	ret = vc4_validate_bin_cl(dev, exec->exec_bo->vaddr + bin_offset, bin,
-				  exec);
-	if ret != 0
-		ret
-
-	ret = vc4_validate_shader_recs(dev, exec);
-	if ret != 0
-		ret
-
-	ret
 }
 
 //??? this function is used to free memory,
@@ -260,7 +260,7 @@ pub fn vc4_get_bcl(dev: &mut device, exec: &mut vc4_exec_info) -> i32
  */
 
 impl vc4_dev {
-	fn vc4_submit_cl_ioctl(&self, data: usize)
+	fn vc4_submit_cl_ioctl(&self, data: usize) -> Result<()>
 	{	
 		let mut exec = vc4_exec_info::new(data);
 
@@ -270,10 +270,11 @@ impl vc4_dev {
 		list_init(&exec.unref_list);
 
 		ret = vc4_cl_lookup_bos(&exec);
-		if ret != 0{
+		if ret != 0 {
 			vc4_complete_exec(dev, &exec);
 			ret
 		}
+
 		if exec.args.bin_cl_size != 0 {
 			ret = vc4_get_bcl(dev, exec);
 			if ret != 0 {

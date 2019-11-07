@@ -7,13 +7,13 @@ use core::mem::size_of;
 use crate::syscall::SysError::*;
 
 struct vc4_rcl_setup {
-	let mut color_read: vc4_bo;
-	let mut color_write: vc4_bo;
-	let mut zs_read: vc4_bo;
-	let mut zs_write: vc4_bo;
+	pub color_read: vc4_bo,
+	pub color_write: vc4_bo,
+	pub zs_read: vc4_bo,
+	pub zs_write: vc4_bo,
 
-	let mut rcl: vc4_cl;
-	let mut next_offset: u32;
+	pub rcl: vc4_cl,
+	pub next_offset: u32,
 }
 
 /*
@@ -223,64 +223,67 @@ pub fn vc4_create_rcl_bo(dev: &device, exec: &vc4_exec_info, setup: &vc4_rcl_set
 	0
 }
 
-pub fn vc4_rcl_surface_setup(exec: &mut vc4_exec_info, /*???how to deal with ** vc4_bo **obj */, surf: &mut drm_vc4_submit_rcl_surface) -> i32
-{
-	let tiling =
-		VC4_GET_FIELD(surf.bits, VC4_LOADSTORE_TILE_BUFFER_TILING) as u8;
-	let buffer =
-		VC4_GET_FIELD(surf.bits, VC4_LOADSTORE_TILE_BUFFER_BUFFER) as u8;
-	let format =
-		VC4_GET_FIELD(surf.bits, VC4_LOADSTORE_TILE_BUFFER_FORMAT) as u8;
-	let mut cpp: i32;
+impl vc4_exec_info {
+	pub fn vc4_rcl_surface_setup(&self, /*???how to deal with ** vc4_bo **obj */, surf: &mut drm_vc4_submit_rcl_surface) -> Result<()>
+	{
+		let tiling =
+			VC4_GET_FIELD(surf.bits, VC4_LOADSTORE_TILE_BUFFER_TILING) as u8;
+		let buffer =
+			VC4_GET_FIELD(surf.bits, VC4_LOADSTORE_TILE_BUFFER_BUFFER) as u8;
+		let format =
+			VC4_GET_FIELD(surf.bits, VC4_LOADSTORE_TILE_BUFFER_FORMAT) as u8;
+		let mut cpp: i32;
 
-	if surf.hindex == ~0
-		0
+		if surf.hindex == ~0 {
+			Ok(())
+		}
 
-	//???question remains.
-	*obj = vc4_use_bo(exec, surf.hindex);
-	if (!*obj)
-		E_INVAL
+		//???question remains.
+		*obj = vc4_use_bo(exec, surf.hindex);
+		if (!*obj)
+			E_INVAL
 
-	if (surf.bits & ~(VC4_LOADSTORE_TILE_BUFFER_TILING_MASK |
-			   VC4_LOADSTORE_TILE_BUFFER_BUFFER_MASK |
-			   VC4_LOADSTORE_TILE_BUFFER_FORMAT_MASK)) {
-		print!("vc4: Unknown bits in load/store: 0x{04x}\n", surf.bits);
-		E_INVAL
-	}
-
-	if (tiling > VC4_TILING_FORMAT_LT) {
-		print!("vc4: Bad tiling format\n");
-		E_INVAL
-	}
-
-	if (buffer == VC4_LOADSTORE_TILE_BUFFER_ZS) {
-		if (format != 0) {
-			print!("vc4: No color format should be set for ZS\n");
+		if (surf.bits & ~(VC4_LOADSTORE_TILE_BUFFER_TILING_MASK |
+				   VC4_LOADSTORE_TILE_BUFFER_BUFFER_MASK |
+				   VC4_LOADSTORE_TILE_BUFFER_FORMAT_MASK)) {
+			print!("vc4: Unknown bits in load/store: 0x{04x}\n", surf.bits);
 			E_INVAL
 		}
-		cpp = 4;
-	} else if (buffer == VC4_LOADSTORE_TILE_BUFFER_COLOR) {
-		match format {
-			VC4_LOADSTORE_TILE_BUFFER_BGR565 | VC4_LOADSTORE_TILE_BUFFER_BGR565_DITHER => 
-				cpp = 2;
-			VC4_LOADSTORE_TILE_BUFFER_RGBA8888 => 
-				cpp = 4;
-			_ => {
-				print!("vc4: Bad tile buffer format\n");
+
+		if (tiling > VC4_TILING_FORMAT_LT) {
+			print!("vc4: Bad tiling format\n");
+			E_INVAL
+		}
+
+		if (buffer == VC4_LOADSTORE_TILE_BUFFER_ZS) {
+			if (format != 0) {
+				print!("vc4: No color format should be set for ZS\n");
 				E_INVAL
 			}
+			cpp = 4;
+		} else if (buffer == VC4_LOADSTORE_TILE_BUFFER_COLOR) {
+			match format {
+				VC4_LOADSTORE_TILE_BUFFER_BGR565 | VC4_LOADSTORE_TILE_BUFFER_BGR565_DITHER => 
+					cpp = 2;
+				VC4_LOADSTORE_TILE_BUFFER_RGBA8888 => 
+					cpp = 4;
+				_ => {
+					print!("vc4: Bad tile buffer format\n");
+					E_INVAL
+				}
+			}
+		} else {
+			print!("vc4: Bad load/store buffer {}.\n", buffer);
+			E_INVAL
 		}
-	} else {
-		print!("vc4: Bad load/store buffer {}.\n", buffer);
-		E_INVAL
-	}
 
-	if (surf.offset & 0xf) {
-		print!("vc4: load/store buffer must be 16b aligned.\n");
-		E_INVAL
-	}
+		if (surf.offset & 0xf) {
+			print!("vc4: load/store buffer must be 16b aligned.\n");
+			E_INVAL
+		}
 
-	0
+		0
+	}
 }
 
 pub fn vc4_rcl_render_config_surface_setup( vc4_exec_info *exec, vc4_bo **obj, surf: drm_vc4_submit_rcl_surface) -> i32
@@ -323,55 +326,58 @@ pub fn vc4_rcl_render_config_surface_setup( vc4_exec_info *exec, vc4_bo **obj, s
 	0
 }
 
-pub fn vc4_get_rcl(dev: &mut device, exec: &mut vc4_exec_info) -> i32
-{
-	// drm_vc4_submit_cl *args = exec->args;
-	bool has_bin = (exec.args.bin_cl_size != 0) as bool;
-	let mut ret = 0;
+impl vc4_dev {
+	pub fn vc4_get_rcl(&self, exec: &mut vc4_exec_info) -> Result<()>
+	{
+		// drm_vc4_submit_cl *args = exec->args;
+		bool has_bin = (exec.args.bin_cl_size != 0) as bool;
+		let mut ret = 0;
 
-	if (exec.args.min_x_tile > exec.args.max_x_tile ||
-	    exec.args.min_y_tile > exec.args.max_y_tile) {
-		print!("vc4: Bad render tile set ({},{})-({},{})\n",
-			exec.args.min_x_tile, exec.args.min_y_tile, exec.args.max_x_tile,
-			exec.args.max_y_tile);
-		E_INVAL
+		if (exec.args.min_x_tile > exec.args.max_x_tile ||
+		    exec.args.min_y_tile > exec.args.max_y_tile) {
+			print!("vc4: Bad render tile set ({},{})-({},{})\n",
+				exec.args.min_x_tile, exec.args.min_y_tile, exec.args.max_x_tile,
+				exec.args.max_y_tile);
+			Err(FsError::InvalidParam);
+		}
+
+		if (has_bin && (exec.args.max_x_tile > exec->bin_tiles_x ||
+				exec.args.max_y_tile > exec->bin_tiles_y)) {
+			print!("vc4: Render tiles ({},{}) outside of bin config "
+				"({},{})\n",
+				exec.args.max_x_tile, exec.args.max_y_tile, exec->bin_tiles_x,
+				exec->bin_tiles_y);
+			Err(FsError::InvalidParam);
+		}
+
+		let mut setup = vc4_rcl_setup;//init = 0
+
+		
+		vc4_rcl_surface_setup(&exec, &setup.color_read, &exec.args.color_read);
+		if ret != 0
+			ret
+
+		ret = vc4_rcl_render_config_surface_setup(&exec, &setup.color_write,
+							  &exec.args.color_write);
+		if ret != 0
+			ret
+
+		ret = vc4_rcl_surface_setup(&exec, &setup.zs_read, &exec.args.zs_read);
+		if ret != 0
+			ret
+
+		ret = vc4_rcl_surface_setup(&exec, &setup.zs_write, &exec.args.zs_write);
+		if ret != 0
+			ret
+
+		/* We shouldn't even have the job submitted to us if there's no
+		 * surface to write out.
+		 */
+		if (!setup.color_write && !setup.zs_write) {
+			print!("vc4: RCL requires color or Z/S write\n");
+			E_INVAL
+		}
+
+		vc4_create_rcl_bo(dev, &exec, &setup)
 	}
-
-	if (has_bin && (exec.args.max_x_tile > exec->bin_tiles_x ||
-			exec.args.max_y_tile > exec->bin_tiles_y)) {
-		print!("vc4: Render tiles ({},{}) outside of bin config "
-			"({},{})\n",
-			exec.args.max_x_tile, exec.args.max_y_tile, exec->bin_tiles_x,
-			exec->bin_tiles_y);
-		E_INVAL
-	}
-
-	let mut setup = vc4_rcl_setup;//init = 0
-
-	ret = vc4_rcl_surface_setup(&exec, &setup.color_read, &exec.args.color_read);
-	if ret != 0
-		ret
-
-	ret = vc4_rcl_render_config_surface_setup(&exec, &setup.color_write,
-						  &exec.args.color_write);
-	if ret != 0
-		ret
-
-	ret = vc4_rcl_surface_setup(&exec, &setup.zs_read, &exec.args.zs_read);
-	if ret != 0
-		ret
-
-	ret = vc4_rcl_surface_setup(&exec, &setup.zs_write, &exec.args.zs_write);
-	if ret != 0
-		ret
-
-	/* We shouldn't even have the job submitted to us if there's no
-	 * surface to write out.
-	 */
-	if (!setup.color_write && !setup.zs_write) {
-		print!("vc4: RCL requires color or Z/S write\n");
-		E_INVAL
-	}
-
-	vc4_create_rcl_bo(dev, &exec, &setup)
 }

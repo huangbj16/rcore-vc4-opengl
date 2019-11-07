@@ -43,8 +43,8 @@ struct vc4_dev {
 	 * and overflow memory allocations.  This is freed when V3D
 	 * powers down.
 	 */
-	bin_bo: usize,//struct vc4_bo *
-	bin_bo: Arc<Vec<vc4_bo>>;
+	//bin_bo: usize,//struct vc4_bo *
+	bin_bo: Vec<Arc<Mutex<vc4_bo>>>;
 
 	/* Size of blocks allocated within bin_bo. */
 	bin_alloc_size: u32,
@@ -52,7 +52,7 @@ struct vc4_dev {
 	/* Special bo for framebuffer, does not need to be freed. */
 	fb_bo: usize,//struct vc4_bo *
 
-	handle_bo_map: usize,//struct vc4_bo *
+	handle_bo_map: BTreeMap<u32, Arc<Mutex<vc4_bo>>>,//struct vc4_bo *
 }
 
 pub const VC4_DEV_BUFSIZE: u32 = (2 * PAGE_SIZE - mem::size_of::<vc4_dev>());
@@ -84,7 +84,7 @@ struct vc4_exec_info {
 	/* This is the array of BOs that were looked up at the start of exec.
 	 * Command validation will use indices into this array.
 	 */
-	bo: Vec<Box<vc4_bo>>,//struct vc4_bo **
+	bo: Vec<Arc<Mutex<vc4_bo>>>,//struct vc4_bo **
 	fb_bo: usize,//struct vc4_bo *
 	bo_count: u32,
 
@@ -102,7 +102,7 @@ struct vc4_exec_info {
 	/* This is the BO where we store the validated command lists, shader
 	 * records, and uniforms.
 	 */
-	exec_bo: usize,//struct vc4_bo *
+	exec_bo: Arc<Mutex<vc4_bo>>,//struct vc4_bo *
 
 	shader_state: usize,//struct vc4_shader_state *
 
