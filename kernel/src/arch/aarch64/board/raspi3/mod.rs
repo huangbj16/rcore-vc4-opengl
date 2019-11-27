@@ -7,12 +7,12 @@ pub mod irq;
 pub mod mailbox;
 pub mod serial;
 pub mod timer;
-pub mod gpu;
+pub mod vc4;
 
 use crate::drivers::gpu::fb::{self, ColorDepth, ColorFormat, FramebufferInfo, FramebufferResult};
 use crate::consts::{KERNEL_OFFSET};
 use core::convert::TryInto;
-use gpu::*;
+use self::vc4::v3dReg::*;
 
 pub const BOARD_NAME: &'static str = "Raspberry Pi 3";
 pub const PERIPHERALS_START: usize = bcm2837::addr::PERIPHERALS_START;
@@ -33,6 +33,7 @@ pub fn init_driver() {
     if let Ok(fb_info) = probe_fb_info(0, 0, 0) {
         fb::init(fb_info);
     }
+    vc4::init();
     emmc::init();
 }
 
@@ -130,9 +131,9 @@ pub fn test_gpu() {
     }
     println!("status: {}", ans);
     if (ans != 0x02443356) { // Magic number.
- 		println!("Error: V3D pipeline isn't powered up and accessable.\n");
+        println!("Error: V3D pipeline isn't powered up and accessable.\n");
         return;
- 	} else {
+    } else {
         println!("Success: V3D pipline has powered up\n");
     }
     unsafe {
