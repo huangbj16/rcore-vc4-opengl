@@ -890,6 +890,10 @@ impl Process {
                 info!("/dev/fb0 will be opened");
                 return Ok(Arc::new(Vga::default()));
             }
+            "/dev/gpu0" => {
+                info!("/dev/gpu0 will be opened");
+                return Ok(Arc::new(Gpu::default()));
+            }
             _ => {}
         }
         let (fd_dir_path, fd_name) = split_path(&path);

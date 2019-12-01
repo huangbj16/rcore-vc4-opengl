@@ -16,6 +16,7 @@ pub use self::pseudo::*;
 pub use self::random::*;
 pub use self::stdio::{STDIN, STDOUT};
 pub use self::vga::*;
+pub use self::gpu::*;
 
 mod device;
 mod file;
