@@ -115,6 +115,16 @@ pub fn ioremap(paddr: usize, len: usize, name: &'static str) -> usize {
     0
 }
 
+/// unmap the I/O memory range in the kernel page table
+pub fn iounmap(vaddr: usize, len: usize) {
+    if let Some(ms) = KERNEL_MEMORY_SET.lock().as_mut() {
+        ms.pop(
+            vaddr,
+            vaddr + len
+        );
+    }
+}
+
 extern "C" {
     fn stext();
     fn etext();

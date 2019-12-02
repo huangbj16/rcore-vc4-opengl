@@ -60,7 +60,7 @@ impl INode for Gpu {
     }
 
     fn io_control(&self, cmd: u32, data: usize) -> Result<()> {
-        if let Some(gd) = GPU_DEVICE.lock().as_ref() {
+        if let Some(gd) = GPU_DEVICE.lock().as_mut() {
             return gd.io_control(cmd, data)
         }
         warn!("use never support ioctl !");
