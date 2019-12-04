@@ -7,7 +7,7 @@ use alloc::sync::Arc;
 pub struct gpu_bo {
 	pub size: u32,
 	pub handle: u32,
-	pub paddr: usize,
+	pub paddr: u32,
 	pub vaddr: usize,
 	pub bo_type: u32,
 }

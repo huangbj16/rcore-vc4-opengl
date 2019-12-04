@@ -4,6 +4,8 @@ pub mod v3dReg;
 mod vc4_drv;
 mod vc4_drm;
 mod vc4_bo;
+mod vc4_gem;
+mod vc4_validate;
 
 use bcm2837::v3d::V3d;
 use crate::drivers::gpu::gpu_device::*;
@@ -19,6 +21,8 @@ use super::super::memory;
 use rcore_memory::PAGE_SIZE;
 use vc4_drm::*;
 use vc4_bo::*;
+use vc4_gem::*;
+use vc4_validate::*;
 
 lazy_static! {
     static ref V3D: Mutex<V3d> = Mutex::new(V3d::new());
@@ -73,10 +77,9 @@ impl GpuDevice {
 
 	pub fn io_control(&mut self, cmd: u32, data: usize) -> Result<()> {
 		match cmd as usize {
-			// DRM_IOCTL_VC4_SUBMIT_CL => {
-			// 	self.vc4_submit_cl_ioctl(data);
-			// 	Ok(())
-			// }
+			DRM_IOCTL_VC4_SUBMIT_CL => {
+				return self.vc4_submit_cl_ioctl(data)
+			}
 			DRM_IOCTL_VC4_CREATE_BO => {
 				return self.vc4_create_bo_ioctl(data)
 			}

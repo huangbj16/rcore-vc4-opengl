@@ -20,11 +20,11 @@ pub const VC4_BO_TYPE_BIN : u32 = 2;
 pub const VC4_BO_TYPE_RCL : u32 = 3;
 pub const VC4_BO_TYPE_BCL : u32 = 4;
 
-fn roundDown(a:u32, n:u32) -> u32 {
+pub fn roundDown(a:u32, n:u32) -> u32 {
 	a - a % n
 }
 
-fn roundUp(a:u32, n:u32) -> u32 {
+pub fn roundUp(a:u32, n:u32) -> u32 {
 	roundDown(a + n - 1, n)
 }
 
@@ -74,7 +74,7 @@ impl GpuDevice {
 				let result = self.handle_bo_map.insert(handle, Arc::new(Mutex::new(gpu_bo {
 																	size: size,
 																	handle: handle,
-																	paddr: paddr as usize,
+																	paddr: paddr,
 																	vaddr: vaddr,
 																	bo_type: bo_type	
 																})));
@@ -177,7 +177,7 @@ impl GpuDevice {
 					vaddr,
 					vaddr + len as usize,
 					attr,
-					Linear::new((bo_entry.paddr - vaddr) as isize),
+					Linear::new((bo_entry.paddr as usize - vaddr) as isize),
 					"mmap_vc4_bo",
 				)
 			}
