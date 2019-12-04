@@ -28,7 +28,7 @@ pub use self::time::*;
 mod custom;
 mod fs;
 mod lkm;
-mod mem;
+pub mod mem;
 mod misc;
 mod net;
 mod proc;

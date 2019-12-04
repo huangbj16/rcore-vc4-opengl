@@ -163,7 +163,7 @@ bitflags! {
 }
 
 impl MmapProt {
-    fn to_attr(self) -> MemoryAttr {
+    pub fn to_attr(self) -> MemoryAttr {
         let mut attr = MemoryAttr::default().user();
         if self.contains(MmapProt::EXEC) {
             attr = attr.execute();
