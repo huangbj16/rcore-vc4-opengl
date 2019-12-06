@@ -67,7 +67,7 @@ pub struct drm_vc4_submit_cl {
 	bo_handles: usize,
 
 	/* Size in bytes of the binner command list. */
-	bin_cl_size: u32,
+	pub bin_cl_size: u32,
 	/* Size in bytes of the set of shader records. */
 	shader_rec_size: u32,
 	/* Number of shader records.
@@ -112,7 +112,7 @@ pub struct drm_vc4_submit_cl {
 
 pub struct vc4_exec_info<'a> {
 	/* Kernel-space copy of the ioctl arguments */
-	args: &'a mut drm_vc4_submit_cl,//struct drm_vc4_submit_cl *
+	pub args: &'a mut drm_vc4_submit_cl,//struct drm_vc4_submit_cl *
 
 	/* This is the array of BOs that were looked up at the start of exec.
 	 * Command validation will use indices into this array.
@@ -137,7 +137,7 @@ pub struct vc4_exec_info<'a> {
 	 */
 	exec_bo: Option<Arc<Mutex<gpu_bo>>>,//struct vc4_bo *
 
-	shader_state: usize,//struct vc4_shader_state *
+	shader_state: Vec<vc4_shader_state>,//struct vc4_shader_state *
 
 	/** How many shader states the user declared they were using. */
 	shader_state_size: u32,
@@ -155,10 +155,10 @@ pub struct vc4_exec_info<'a> {
 	 * Computed addresses pointing into exec_bo where we start the
 	 * bin thread (ct0) and render thread (ct1).
 	 */
-	ct0ca: u32,
-	ct0ea: u32,
-	ct1ca: u32,
-	ct1ea: u32,
+	pub ct0ca: u32,
+	pub ct0ea: u32,
+	pub ct1ca: u32,
+	pub ct1ea: u32,
 
 	/* Pointer to the unvalidated bin CL (if present). */
 	bin_u: usize,
@@ -273,14 +273,17 @@ impl GpuDevice {
 		// 	}
 		// }
 
+		let bin_start_addr: usize;
+
 		if let Some(bo) = self.vc4_bo_create(exec_size, VC4_BO_TYPE_BCL) {
 			exec.exec_bo =Some(bo.clone());
 			let bo_entry = bo.lock();
 			exec.ct0ca = bo_entry.paddr as u32 + bin_offset;
-
 			exec.shader_rec_v = bo_entry.vaddr + shader_rec_offset as usize;
 			exec.shader_rec_p = bo_entry.paddr + shader_rec_offset;
 			exec.shader_rec_size = exec.args.shader_rec_size;
+
+			bin_start_addr = bo_entry.vaddr + bin_offset as usize;
 		} else {
 			print!("vc4: Couldn't allocate BO for binning\n");
 			return Err(FsError::InvalidParam)
@@ -289,7 +292,6 @@ impl GpuDevice {
 
 		// TODO
 		// list_add_before(&exec->unref_list, &exec->exec_bo->unref_head);
-
 		let mut temp: Vec<u8> = Vec::with_capacity(exec.args.bin_cl_size as usize);
 		let baddr: usize = exec.args.bin_cl;
 		for i in 0..exec.args.bin_cl_size as usize {
@@ -302,7 +304,16 @@ impl GpuDevice {
 			}
 		}
 
-		self.vc4_validate_bin_cl(exec, &temp)?;
+		for i in 0..exec.args.shader_rec_count {
+			exec.shader_state.push(vc4_shader_state {
+				addr: 0,
+				max_index: 0
+			})
+		}
+
+		exec.shader_state_count = exec.args.shader_rec_count;
+
+		self.vc4_validate_bin_cl(exec, bin_start_addr, &temp)?;
 		//vc4_validate_shader_recs(exec)?;
 
 		//TODO
@@ -323,7 +334,7 @@ impl GpuDevice {
 			bo_index: [0, 0],
 			
 			exec_bo: None,//struct vc4_bo *
-			shader_state: 0,//struct vc4_shader_state *
+			shader_state: Vec::new(),//struct vc4_shader_state *
 			/** How many shader states the user declared they were using. */
 			shader_state_size: 0,
 			/** How many shader state records the validator has seen. */
