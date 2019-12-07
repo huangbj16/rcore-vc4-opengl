@@ -19,12 +19,12 @@ struct drm_vc4_submit_rcl_surface {
 }
 
 #[repr(C)]
-struct vc4_shader_state {
-	addr: u32,
+pub struct vc4_shader_state {
+	pub addr: u32,
 	/* Maximum vertex index referenced by any primitive using this
 	 * shader state.
 	 */
-	max_index: u32,
+	pub max_index: u32,
 }
 
 #[repr(C)]
@@ -117,8 +117,8 @@ pub struct vc4_exec_info<'a> {
 	/* This is the array of BOs that were looked up at the start of exec.
 	 * Command validation will use indices into this array.
 	 */
-	bo: Vec<Arc<Mutex<gpu_bo>>>,//struct vc4_bo **
-	bo_count: u32,
+	pub bo: Vec<Arc<Mutex<gpu_bo>>>,//struct vc4_bo **
+	pub bo_count: u32,
 
 	/* List of other BOs used in the job that need to be released
 	 * once the job is complete.
@@ -130,26 +130,26 @@ pub struct vc4_exec_info<'a> {
 	/* Current unvalidated indices into @bo loaded by the non-hardware
 	 * VC4_PACKET_GEM_HANDLES.
 	 */
-	bo_index: [u32; 2],
+	pub bo_index: [u32; 2],
 
 	/* This is the BO where we store the validated command lists, shader
 	 * records, and uniforms.
 	 */
 	exec_bo: Option<Arc<Mutex<gpu_bo>>>,//struct vc4_bo *
 
-	shader_state: Vec<vc4_shader_state>,//struct vc4_shader_state *
+	pub shader_state: Vec<vc4_shader_state>,//struct vc4_shader_state *
 
 	/** How many shader states the user declared they were using. */
-	shader_state_size: u32,
+	pub shader_state_size: u32,
 	/** How many shader state records the validator has seen. */
-	shader_state_count: u32,
+	pub shader_state_count: u32,
 
-	bin_tiles_x: u8,
-	bin_tiles_y: u8,
+	pub bin_tiles_x: u8,
+	pub bin_tiles_y: u8,
 	/* Physical address of the start of the tile alloc array
 	 * (where each tile's binned CL will start)
 	 */
-	tile_alloc_offset: u32,
+	pub tile_alloc_offset: u32,
 
 	/**
 	 * Computed addresses pointing into exec_bo where we start the
@@ -168,10 +168,10 @@ pub struct vc4_exec_info<'a> {
 	 * (u and v) get incremented and size decremented as the shader recs
 	 * themselves are validated.
 	 */
-	shader_rec_u: usize,
-	shader_rec_v: usize,
-	shader_rec_p: u32,
-	shader_rec_size: u32,
+	pub shader_rec_u: usize,
+	pub shader_rec_v: usize,
+	pub shader_rec_p: u32,
+	pub shader_rec_size: u32,
 }
 
 impl GpuDevice {
