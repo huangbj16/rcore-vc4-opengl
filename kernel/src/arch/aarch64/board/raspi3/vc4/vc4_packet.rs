@@ -1,10 +1,22 @@
 // use vc4_regs::{BIT, VC4_MASK};
 
-const fn Bit_8(nr: u8) -> u8 {
+const fn bit_8(nr: u8) -> u8 {
     1 << nr
 }
 
-const fn Mask_8(low: u8, high: u8) -> u8 {
+const fn bit_16(nr: u16) -> u16 {
+    1 << nr
+}
+
+const fn bit_32(nr: u32) -> u32 {
+    1 << nr
+}
+
+const fn mask8(low: u8, high: u8) -> u8 {
+    (1 << ((high) - (low) + 1) - 1) << (low)
+}
+
+const fn mask16(low: u16, high: u16) -> u16 {
     (1 << ((high) - (low) + 1) - 1) << (low)
 }
 
@@ -116,9 +128,9 @@ pub const VC4_PACKET_GEM_HANDLES_SIZE: u32 =9;
 //  * Bits used by packets like VC4_PACKET_STORE_TILE_BUFFER_GENERAL and
 //  * VC4_PACKET_TILE_RENDERING_MODE_CONFIG.
 // */
-// pub const VC4_TILING_FORMAT_LINEAR  : usize =  0;
-// pub const VC4_TILING_FORMAT_T    : usize =     1;
-// pub const VC4_TILING_FORMAT_LT    : usize =    2;
+pub const VC4_TILING_FORMAT_LINEAR  : u8 =  0;
+pub const VC4_TILING_FORMAT_T    : u8 =     1;
+pub const VC4_TILING_FORMAT_LT    : u8 =    2;
 // /** @} */
 
 // /** @{
@@ -137,10 +149,10 @@ pub const VC4_PACKET_GEM_HANDLES_SIZE: u32 =9;
 //  * VC4_PACKET_LOAD_TILE_BUFFER_GENERAL (low bits of the address)
 //  */
 
-// pub const VC4_LOADSTORE_TILE_BUFFER_EOF: usize =BIT(3);
-// pub const VC4_LOADSTORE_TILE_BUFFER_DISABLE_FULL_VG_MASK : usize =BIT(2);
-// pub const VC4_LOADSTORE_TILE_BUFFER_DISABLE_FULL_ZS: usize =BIT(1);
-// pub const VC4_LOADSTORE_TILE_BUFFER_DISABLE_FULL_COLOR  : usize = BIT(0);
+pub const VC4_LOADSTORE_TILE_BUFFER_EOF: u32 = bit_32(3);
+pub const VC4_LOADSTORE_TILE_BUFFER_DISABLE_FULL_VG_MASK : u32 = bit_32(2);
+pub const VC4_LOADSTORE_TILE_BUFFER_DISABLE_FULL_ZS: u32 = bit_32(1);
+pub const VC4_LOADSTORE_TILE_BUFFER_DISABLE_FULL_COLOR  : u32 = bit_32(0);
 
 // /** @} */
 
@@ -149,16 +161,16 @@ pub const VC4_PACKET_GEM_HANDLES_SIZE: u32 =9;
 //  * byte 0-1 of VC4_PACKET_STORE_TILE_BUFFER_GENERAL and
 //  * VC4_PACKET_LOAD_TILE_BUFFER_GENERAL
 //  */
-// pub const VC4_STORE_TILE_BUFFER_DISABLE_VG_MASK_CLEAR: usize = BIT(15);
-// pub const VC4_STORE_TILE_BUFFER_DISABLE_ZS_CLEAR    : usize = BIT(14);
-// pub const VC4_STORE_TILE_BUFFER_DISABLE_COLOR_CLEAR : usize = BIT(13);
-// pub const VC4_STORE_TILE_BUFFER_DISABLE_SWAP: usize =BIT(12);
+pub const VC4_STORE_TILE_BUFFER_DISABLE_VG_MASK_CLEAR: u16 = bit_16(15);
+pub const VC4_STORE_TILE_BUFFER_DISABLE_ZS_CLEAR    : u16 = bit_16(14);
+pub const VC4_STORE_TILE_BUFFER_DISABLE_COLOR_CLEAR : u16 = bit_16(13);
+pub const VC4_STORE_TILE_BUFFER_DISABLE_SWAP: u16 = bit_16(12);
 
-// pub const VC4_LOADSTORE_TILE_BUFFER_FORMAT_MASK: usize =VC4_MASK(9, 8);
-// pub const VC4_LOADSTORE_TILE_BUFFER_FORMAT_SHIFT    : usize = 8;
-// pub const VC4_LOADSTORE_TILE_BUFFER_RGBA8888: usize =0;
-// pub const VC4_LOADSTORE_TILE_BUFFER_BGR565_DITHER   : usize = 1;
-// pub const VC4_LOADSTORE_TILE_BUFFER_BGR565: usize =2;
+pub const VC4_LOADSTORE_TILE_BUFFER_FORMAT_MASK: u16 = mask16(9, 8);
+pub const VC4_LOADSTORE_TILE_BUFFER_FORMAT_SHIFT    : u16 = 8;
+pub const VC4_LOADSTORE_TILE_BUFFER_RGBA8888: u16 =0;
+pub const VC4_LOADSTORE_TILE_BUFFER_BGR565_DITHER   : u16 = 1;
+pub const VC4_LOADSTORE_TILE_BUFFER_BGR565: u16 =2;
 // /** @} */
 
 // /** @{
@@ -172,18 +184,18 @@ pub const VC4_PACKET_GEM_HANDLES_SIZE: u32 =9;
 // pub const VC4_STORE_TILE_BUFFER_MODE_DECIMATE_X4    : usize = (1 << 6);
 // pub const VC4_STORE_TILE_BUFFER_MODE_DECIMATE_X16   : usize = (2 << 6);
 
-// /** The values of the field are VC4_TILING_FORMAT_* */
-// pub const VC4_LOADSTORE_TILE_BUFFER_TILING_MASK: usize =VC4_MASK(5, 4);
-// pub const VC4_LOADSTORE_TILE_BUFFER_TILING_SHIFT : usize =4;
-// pub const VC4_LOADSTORE_TILE_BUFFER_BUFFER_MASK: usize =VC4_MASK(2, 0);
-// pub const VC4_LOADSTORE_TILE_BUFFER_BUFFER_SHIFT : usize =0;
-// pub const VC4_LOADSTORE_TILE_BUFFER_NONE: usize =0;
-// pub const VC4_LOADSTORE_TILE_BUFFER_COLOR: usize =1;
-// pub const VC4_LOADSTORE_TILE_BUFFER_ZS: usize =2;
-// pub const VC4_LOADSTORE_TILE_BUFFER_Z: usize =3;
-// pub const VC4_LOADSTORE_TILE_BUFFER_VG_MASK: usize =4;
-// pub const VC4_LOADSTORE_TILE_BUFFER_FULL: usize =5;
-// /** @} */
+/** The values of the field are VC4_TILING_FORMAT_* */
+pub const VC4_LOADSTORE_TILE_BUFFER_TILING_MASK: u16 = mask16(5, 4);
+pub const VC4_LOADSTORE_TILE_BUFFER_TILING_SHIFT : u16 =4;
+pub const VC4_LOADSTORE_TILE_BUFFER_BUFFER_MASK: u16 =mask16(2, 0);
+pub const VC4_LOADSTORE_TILE_BUFFER_BUFFER_SHIFT : u16 =0;
+pub const VC4_LOADSTORE_TILE_BUFFER_NONE: u16 =0;
+pub const VC4_LOADSTORE_TILE_BUFFER_COLOR: u16 =1;
+pub const VC4_LOADSTORE_TILE_BUFFER_ZS: u16 =2;
+pub const VC4_LOADSTORE_TILE_BUFFER_Z: u16 =3;
+pub const VC4_LOADSTORE_TILE_BUFFER_VG_MASK: u16 =4;
+pub const VC4_LOADSTORE_TILE_BUFFER_FULL: u16 =5;
+/** @} */
 
 // pub const VC4_INDEX_BUFFER_U8: usize =(0 << 4);
 // pub const VC4_INDEX_BUFFER_U16: usize =(1 << 4);
@@ -228,23 +240,23 @@ pub const VC4_PACKET_GEM_HANDLES_SIZE: u32 =9;
 // /** @{ bits in the last u8 of VC4_PACKET_TILE_BINNING_MODE_CONFIG */
 // pub const VC4_BIN_CONFIG_DB_NON_MS: usize =BIT(7);
 
-pub const VC4_BIN_CONFIG_ALLOC_BLOCK_SIZE_MASK: u8 = Mask_8(6, 5);
+pub const VC4_BIN_CONFIG_ALLOC_BLOCK_SIZE_MASK: u8 = mask8(6, 5);
 pub const VC4_BIN_CONFIG_ALLOC_BLOCK_SIZE_SHIFT: u8 =5;
 pub const VC4_BIN_CONFIG_ALLOC_BLOCK_SIZE_32: u8 =0;
 pub const VC4_BIN_CONFIG_ALLOC_BLOCK_SIZE_64: u8 =1;
 pub const VC4_BIN_CONFIG_ALLOC_BLOCK_SIZE_128: u8 =2;
 pub const VC4_BIN_CONFIG_ALLOC_BLOCK_SIZE_256: u8 =3;
 
-pub const VC4_BIN_CONFIG_ALLOC_INIT_BLOCK_SIZE_MASK : u8 = Mask_8(4, 3);
+pub const VC4_BIN_CONFIG_ALLOC_INIT_BLOCK_SIZE_MASK : u8 = mask8(4, 3);
 pub const VC4_BIN_CONFIG_ALLOC_INIT_BLOCK_SIZE_SHIFT : u8 =3;
 pub const VC4_BIN_CONFIG_ALLOC_INIT_BLOCK_SIZE_32    : u8 =0;
 pub const VC4_BIN_CONFIG_ALLOC_INIT_BLOCK_SIZE_64    : u8 =1;
 pub const VC4_BIN_CONFIG_ALLOC_INIT_BLOCK_SIZE_128   : u8 =2;
 pub const VC4_BIN_CONFIG_ALLOC_INIT_BLOCK_SIZE_256   : u8 =3;
 
-pub const VC4_BIN_CONFIG_AUTO_INIT_TSDA: u8 = Bit_8(2);
-pub const VC4_BIN_CONFIG_TILE_BUFFER_64BIT: u8 = Bit_8(1);
-pub const VC4_BIN_CONFIG_MS_MODE_4X: u8 = Bit_8(0);
+pub const VC4_BIN_CONFIG_AUTO_INIT_TSDA: u8 = bit_8(2);
+pub const VC4_BIN_CONFIG_TILE_BUFFER_64BIT: u8 = bit_8(1);
+pub const VC4_BIN_CONFIG_MS_MODE_4X: u8 = bit_8(0);
 // /** @} */
 
 // /** @{ bits in the last u16 of VC4_PACKET_TILE_RENDERING_MODE_CONFIG */
@@ -255,18 +267,18 @@ pub const VC4_BIN_CONFIG_MS_MODE_4X: u8 = Bit_8(0);
 // pub const VC4_RENDER_CONFIG_ENABLE_VG_MASK: usize =BIT(8);
 
 // /** The values of the field are VC4_TILING_FORMAT_* */
-// pub const VC4_RENDER_CONFIG_MEMORY_FORMAT_MASK: usize =VC4_MASK(7, 6);
-// pub const VC4_RENDER_CONFIG_MEMORY_FORMAT_SHIFT: usize =6;
+pub const VC4_RENDER_CONFIG_MEMORY_FORMAT_MASK: u16 = mask16(7, 6);
+pub const VC4_RENDER_CONFIG_MEMORY_FORMAT_SHIFT: u16 = 6;
 
 // pub const VC4_RENDER_CONFIG_DECIMATE_MODE_1X: usize =(0 << 4);
 // pub const VC4_RENDER_CONFIG_DECIMATE_MODE_4X: usize =(1 << 4);
 // pub const VC4_RENDER_CONFIG_DECIMATE_MODE_16X: usize =(2 << 4);
 
-// pub const VC4_RENDER_CONFIG_FORMAT_MASK: usize =VC4_MASK(3, 2);
-// pub const VC4_RENDER_CONFIG_FORMAT_SHIFT: usize =2;
-// pub const VC4_RENDER_CONFIG_FORMAT_BGR565_DITHERED:usize =  0;
-// pub const VC4_RENDER_CONFIG_FORMAT_RGBA8888: usize =1;
-// pub const VC4_RENDER_CONFIG_FORMAT_BGR565: usize =2;
+pub const VC4_RENDER_CONFIG_FORMAT_MASK: u16 = mask16(3, 2);
+pub const VC4_RENDER_CONFIG_FORMAT_SHIFT: u16 = 2;
+pub const VC4_RENDER_CONFIG_FORMAT_BGR565_DITHERED:u16 =  0;
+pub const VC4_RENDER_CONFIG_FORMAT_RGBA8888: u16 =1;
+pub const VC4_RENDER_CONFIG_FORMAT_BGR565: u16 =2;
 
 // pub const VC4_RENDER_CONFIG_TILE_BUFFER_64BIT: usize =BIT(1);
 // pub const VC4_RENDER_CONFIG_MS_MODE_4X: usize =BIT(0);

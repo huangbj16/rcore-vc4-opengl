@@ -291,4 +291,85 @@ impl GpuDevice {
 
 		Ok(())
 	}
+
+	fn validate_nv_shader_rec(&self, exec: &mut vc4_exec_info, index: u32, shader_u: &[u8], shader_offset: &mut usize)  -> Result<()>
+	{
+		let shader_reloc_count = 1;
+		let mut bo: Vec<Arc<Mutex<gpu_bo>>> = Vec::new();
+		let nr_relocs = 3;
+		let packet_size = 16;
+
+		if (nr_relocs * 4 > exec.shader_rec_size) {
+			println!("vc4: overflowed shader recs reading {} handles from {} bytes left",
+				nr_relocs, exec.shader_rec_size);
+			return Err(FsError::InvalidParam)
+		}
+
+
+		let mut offset: usize = (nr_relocs as usize) * 4;
+		exec.shader_rec_size -= nr_relocs * 4;
+
+		if (packet_size > exec.shader_rec_size) {
+			print!("vc4: overflowed shader recs copying {}b packet from {} bytes left\n",
+				packet_size, exec.shader_rec_size);
+			return Err(FsError::InvalidParam)
+		}
+
+		let pkt_u = offset;
+		let pkt_v = exec.shader_rec_v;
+		for i in 0..packet_size as usize {
+			//memcpy(pkt_v, pkt_u, packet_size);
+			unsafe { *((pkt_v + i) as *mut u8) = shader_u[offset + i]; }			
+		}
+		
+		offset += packet_size as usize;
+		exec.shader_rec_v += packet_size as usize;
+		exec.shader_rec_size -= packet_size;
+
+		for i in 0..nr_relocs as usize {
+			let handle = read32_from_slice(&shader_u[(i * 4)..(i * 4 + 4)]);
+			if let Some(bo_item) = vc4_use_bo(exec, handle) {
+				bo.push(bo_item.clone());
+			} else {
+				return Err(FsError::InvalidParam)
+			}
+		}
+
+		let stride: u8 = shader_u[pkt_u + 1];
+		let fs_offset: u32 = read32_from_slice(&shader_u[(pkt_u + 4)..(pkt_u + 8)]);
+		let uniform_offset: u32 = read32_from_slice(&shader_u[(pkt_u + 8)..(pkt_u + 12)]);
+		let data_offset: u32 = read32_from_slice(&shader_u[(pkt_u + 12)..(pkt_u + 16)]);
+
+		let max_index: u32;
+		let bo_entry = bo[0].lock();
+		unsafe { *((pkt_v + 4) as *mut u32) = bo_entry.paddr + fs_offset; }
+		let bo_entry = bo[1].lock();
+		unsafe { *((pkt_v + 8) as *mut u32) = bo_entry.paddr + uniform_offset; }			
+
+		let bo_entry = bo[2].lock();
+		if (stride != 0) {
+			max_index = (bo_entry.size - data_offset) / (stride as u32);
+			if (exec.shader_state[index as usize].max_index > max_index) {
+				print!("vc4: primitives use index {} out of supplied {}\n",
+					exec.shader_state[index as usize].max_index, max_index);
+				return Err(FsError::InvalidParam)
+			}
+		}
+		unsafe {
+			*((pkt_v + 12) as *mut u32) = bo_entry.paddr + data_offset;
+		}
+
+		*shader_offset += offset;
+
+		Ok(())
+	}
+
+	pub fn vc4_validate_shader_recs(&self, exec: &mut vc4_exec_info, shaders: & Vec<u8>)  -> Result<()>
+	{
+		let mut shader_begin: usize = 0;
+		for i in 0..exec.shader_state_count {
+			self.validate_nv_shader_rec(exec, i, &shaders[shader_begin..], &mut shader_begin)?;
+		}
+		Ok(())
+	}
 }

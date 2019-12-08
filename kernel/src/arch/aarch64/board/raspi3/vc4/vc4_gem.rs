@@ -6,16 +6,68 @@ use rcore_fs::vfs::*;
 use crate::memory::copy_from_user;
 use super::vc4_bo::{roundUp, roundDown, VC4_BO_TYPE_BCL};
 use super::vc4_validate::*;
+use super::V3D;
+use super::v3dReg::*;
 
-struct drm_vc4_submit_rcl_surface {
-	hindex: u32, /* Handle index, or ~0 if not present. */
-	offset: u32, /* Offset to start of buffer. */
+pub fn vc4_set_field(value: u32, shift: u32, mask: u32) -> u32 {
+	let fieldvar = value << shift;
+	fieldvar & mask
+}
+
+pub fn vc4_flush_caches()
+{
+	let mut v3d = V3D.lock();
+	/* Flush the GPU L2 caches.  These caches sit on top of system
+	 * L3 (the 128kb or so shared with the CPU), and are
+	 * non-allocating in the L3.
+	 */
+	v3d.write(V3D_L2CACTL, V3D_L2CACTL_L2CCLR);
+
+	v3d.write(V3D_SLCACTL, vc4_set_field(0xf, V3D_SLCACTL_T1CC_SHIFT, V3D_SLCACTL_T1CC_MASK) |
+				       vc4_set_field(0xf, V3D_SLCACTL_T0CC_SHIFT, V3D_SLCACTL_T0CC_MASK) |
+				       vc4_set_field(0xf, V3D_SLCACTL_UCC_SHIFT, V3D_SLCACTL_UCC_MASK) |
+				       vc4_set_field(0xf, V3D_SLCACTL_ICC_SHIFT, V3D_SLCACTL_ICC_MASK));
+}
+
+pub fn v3d_ctncs(thread: u32) -> usize {
+	V3D_CT0CS + 4 * (thread as usize)
+}
+
+pub fn v3d_ctnca(thread: u32) -> usize {
+	V3D_CT0CA + 4 * (thread as usize)
+}
+
+pub fn v3d_ctnea(thread: u32) -> usize {
+	V3D_CT0EA + 4 * (thread as usize)
+}
+
+pub fn submit_cl(thread: u32, start: u32, end: u32) {
+	/* Set the current and end address of the control list.
+	 * Writing the end register is what starts the job.
+	 */
+
+	let mut v3d = V3D.lock();
+	// stop the thread
+	v3d.write(v3d_ctncs(thread), 0x20);
+
+	// Wait for thread to stop
+	while (v3d.read(v3d_ctncs(thread)) & 0x20) != 0 {}
+
+	v3d.write(v3d_ctnca(thread), start);
+	v3d.write(v3d_ctnea(thread), end);
+}
+
+#[repr(C)]
+#[derive(Clone, Copy)]
+pub struct drm_vc4_submit_rcl_surface {
+	pub hindex: u32, /* Handle index, or ~0 if not present. */
+	pub offset: u32, /* Offset to start of buffer. */
 	/*
 	 * Bits for either render config (color_write) or load/store packet.
 	 * Bits should all be 0 for MSAA load/stores.
 	 */
-	bits: u16,
-	flags: u16,
+	pub bits: u16,
+	pub flags: u16,
 }
 
 #[repr(C)]
@@ -47,7 +99,7 @@ pub struct drm_vc4_submit_cl {
 	 * and an attribute count), so those BO indices into bo_handles are
 	 * just stored as __u32s before each shader record passed in.
 	 */
-	shader_rec: u64,
+	pub shader_rec: usize,
 
 	/* Pointer to uniform data and texture handles for the textures
 	 * referenced by the shader.
@@ -63,7 +115,7 @@ pub struct drm_vc4_submit_cl {
 	 * because the kernel has to determine the sizes anyway during shader
 	 * code validation.
 	 */
-	uniforms: u64,
+	uniforms: usize,
 	bo_handles: usize,
 
 	/* Size in bytes of the binner command list. */
@@ -84,25 +136,25 @@ pub struct drm_vc4_submit_cl {
 	bo_handle_count: u32,
 
 	/* RCL setup: */
-	width: u16,
-	height: u16,
-	min_x_tile: u8,
-	min_y_tile: u8,
-	max_x_tile: u8,
-	max_y_tile: u8,
-	color_read: drm_vc4_submit_rcl_surface,
-	color_write: drm_vc4_submit_rcl_surface,
-	zs_read: drm_vc4_submit_rcl_surface,
-	zs_write: drm_vc4_submit_rcl_surface,
+	pub width: u16,
+	pub height: u16,
+	pub min_x_tile: u8,
+	pub min_y_tile: u8,
+	pub max_x_tile: u8,
+	pub max_y_tile: u8,
+	pub color_read: drm_vc4_submit_rcl_surface,
+	pub color_write: drm_vc4_submit_rcl_surface,
+	pub zs_read: drm_vc4_submit_rcl_surface,
+	pub zs_write: drm_vc4_submit_rcl_surface,
 	msaa_color_write: drm_vc4_submit_rcl_surface,
 	msaa_zs_write: drm_vc4_submit_rcl_surface,
-	clear_color : [u32;2],
-	clear_z: u32,
-	clear_s: u8,
+	pub clear_color : [u32;2],
+	pub clear_z: u32,
+	pub clear_s: u8,
 
 	//__u32 pad:24;
 
-	flags: u32,
+	pub flags: u32,
 
 	/* Returned value of the seqno of this render job (for the
 	 * wait ioctl).
@@ -297,7 +349,7 @@ impl GpuDevice {
 		for i in 0..exec.args.bin_cl_size as usize {
 			let vaddr = baddr + i;
 			if let Some(b) = copy_from_user(vaddr as *const u8) {
-				temp[i] = b;
+				temp.push(b)
 			} else {
 				println!("VC4: copy from user error");
 				return Err(FsError::InvalidParam)
@@ -314,13 +366,79 @@ impl GpuDevice {
 		exec.shader_state_count = exec.args.shader_rec_count;
 
 		self.vc4_validate_bin_cl(exec, bin_start_addr, &temp)?;
-		//vc4_validate_shader_recs(exec)?;
+		
+		let shader_baddr: usize = exec.args.shader_rec;		
+		temp.clear();
+		for i in 0..exec.args.shader_rec_size as usize {
+			let vaddr = baddr + i;
+			if let Some(b) = copy_from_user(vaddr as *const u8) {
+				temp.push(b);
+			} else {
+				return Err(FsError::InvalidParam)
+			}
+		}
 
-		//TODO
+		self.vc4_validate_shader_recs(exec, &temp)?;
+
 		//list_add_before(&exec.unref_list, &exec.exec_bo.unref_head);
 		Ok(())
 	}
 
+	pub fn vc4_submit_next_bin_job(&self, exec: &vc4_exec_info)
+	{
+		// if exec.is_None()
+		// 	return;
+
+		vc4_flush_caches();
+
+		/* Either put the job in the binner if it uses the binner, or
+		 * immediately move it to the to-be-rendered queue.
+		 */
+		if exec.ct0ca == exec.ct0ea {
+			return;
+		}
+
+		// reset binning frame count
+		{
+			let mut v3d = V3D.lock();
+			v3d.write(V3D_BFC, 1);
+		}
+
+		submit_cl(0, exec.ct0ca, exec.ct0ea);
+
+		// wait for binning to finish
+		{
+			let v3d = V3D.lock();
+			while (v3d.read(V3D_BFC) == 0) {}
+		}
+	}
+
+	pub fn vc4_submit_next_render_job(&self, exec: &vc4_exec_info)
+	{
+		// reset rendering frame count
+		{
+			let mut v3d = V3D.lock();
+			v3d.write(V3D_RFC, 1);
+		}
+
+		submit_cl(1, exec.ct1ca, exec.ct1ea);
+
+		// wait for render to finish
+		{
+			let v3d = V3D.lock();
+			while (v3d.read(V3D_RFC) == 0) {}
+		}
+	}
+
+	pub fn vc4_queue_submit(&self, exec: &vc4_exec_info)
+	{
+		// TODO
+		self.vc4_submit_next_bin_job(&exec);
+		self.vc4_submit_next_render_job(&exec);
+	}
+
+	// TODO
+	// clean all the bo
 	pub fn vc4_submit_cl_ioctl(&mut self, data: usize) -> Result<()>
 	{
 		let args = unsafe { &mut *(data as *mut drm_vc4_submit_cl) };
@@ -373,7 +491,7 @@ impl GpuDevice {
 			exec.ct0ea = 0;
 		}
 
-		// vc4_get_rcl(&exec)?;
+		self.vc4_get_rcl(&mut exec)?;
 
 		// //TODO for clean
 		// //vc4_complete_exec(&exec)?;
@@ -382,7 +500,7 @@ impl GpuDevice {
 		//  * since it's part of our stack.
 		//  */
 		// exec.args = Option<None>;
-		// vc4_queue_submit(dev, &exec);
+		self.vc4_queue_submit(&exec);
 		// //TODO for clean
 		// //vc4_complete_exec(dev, &exec);
 		Ok(())	

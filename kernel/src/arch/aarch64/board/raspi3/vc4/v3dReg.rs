@@ -1,4 +1,12 @@
 
+const fn bit_32(nr: u32) -> u32 {
+    1 << nr
+}
+
+const fn mask_32(low: u32, high: u32) -> u32 {
+    (1 << ((high) - (low) + 1) - 1) << (low)
+}
+
 // Defines for v3d register offsets
 pub const V3D_IDENT0  : usize =0x000>>2; // V3D Identification 0 (V3D block identity)
 pub const V3D_IDENT1  : usize =0x004>>2; // V3D Identification 1 (V3D Configuration A)
@@ -91,3 +99,14 @@ pub const V3D_FDBGR   : usize =0xf0c>>2; // FEP Internal Ready Signals
 pub const V3D_FDBGS   : usize =0xf10>>2; // FEP Internal Stall Input Signals
 
 pub const V3D_ERRSTAT : usize =0xf20>>2; // Miscellaneous Error Signals (VPM, VDW, VCD, VCM, L2C)
+
+pub const V3D_L2CACTL_L2CCLR	: u32 = bit_32(2);
+
+pub const V3D_SLCACTL_T1CC_MASK : u32 = mask_32(27, 24);
+pub const V3D_SLCACTL_T1CC_SHIFT: u32 = 24;
+pub const V3D_SLCACTL_T0CC_MASK : u32 = mask_32(19, 16);
+pub const V3D_SLCACTL_T0CC_SHIFT: u32 = 16;
+pub const V3D_SLCACTL_UCC_MASK  : u32 = mask_32(11, 8);
+pub const V3D_SLCACTL_UCC_SHIFT : u32 = 8;
+pub const V3D_SLCACTL_ICC_MASK  : u32 = mask_32(3, 0);
+pub const V3D_SLCACTL_ICC_SHIFT : u32 = 0;

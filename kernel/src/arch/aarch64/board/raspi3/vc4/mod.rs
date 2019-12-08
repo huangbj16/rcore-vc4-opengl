@@ -7,6 +7,7 @@ mod vc4_bo;
 mod vc4_gem;
 mod vc4_validate;
 mod vc4_packet;
+mod vc4_render_cl;
 
 use bcm2837::v3d::V3d;
 use crate::drivers::gpu::gpu_device::*;
