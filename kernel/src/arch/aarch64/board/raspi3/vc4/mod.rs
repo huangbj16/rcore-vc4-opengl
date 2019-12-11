@@ -50,22 +50,44 @@ impl GpuDevice {
 			}
 		}
 
+		let mut device = GpuDevice {
+						bin_bo: None,
+						fb_bo: None,
+						bin_alloc_size: 0,
+						handle_bo_map: BTreeMap::new(),
+					};
+
 		//check framebuffer
 		{
-			let lock = fb::FRAME_BUFFER.lock();
-			if lock.is_none() {
+			if let Some(ffb) = fb::FRAME_BUFFER.lock().take() {
+				let mut handle: u32 = 0;
+				for i in 1..5 {
+					if let Ok(busaddr) = mailbox::mem_lock(i) {
+						if busaddr as usize == ffb.fb_info.paddr {
+							handle = i;
+							break;
+						}
+					}
+				}
+
+				let arc = Arc::new(Mutex::new(gpu_bo {
+					size: ffb.fb_info.screen_size as u32,
+					handle: handle,
+					paddr: ffb.fb_info.paddr as u32,
+					vaddr: ffb.fb_info.vaddr,
+					bo_type: VC4_BO_TYPE_FB,
+				}));
+
+				device.fb_bo = Some(arc.clone());
+
+				device.handle_bo_map.insert(handle, arc.clone());
+			} else {
 				info!("videocore: not able to bind framebuffer");
 				return None
 			}
 			
 			info!("videocore: bind framebuffer ok");
 		}
-
-		let mut device = GpuDevice {
-						bin_bo: None,
-						bin_alloc_size: 0,
-						handle_bo_map: BTreeMap::new(),
-					};
 
 		//alloc binner
 		let mut size: u32 = 512 * 1024;

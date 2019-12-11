@@ -15,6 +15,7 @@ pub struct gpu_bo {
 pub struct GpuDevice {
 	//bin_bo: usize,//struct gpu_bo *
 	pub bin_bo: Option<Arc<Mutex<gpu_bo>>>,
+	pub fb_bo: Option<Arc<Mutex<gpu_bo>>>,
 
 	//Size of blocks allocated within bin_bo. 
 	pub bin_alloc_size: u32,

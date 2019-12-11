@@ -49,8 +49,13 @@ impl GpuDevice {
 	pub fn vc4_bo_create(&mut self, size: u32, bo_type: u32) -> Option<Arc<Mutex<gpu_bo>>>
 	{
 		// default frame buffer
-		// if (bo_type == VC4_BO_TYPE_FB)
-		// 	Some(self.fb_bo.clone())
+		if (bo_type == VC4_BO_TYPE_FB) {
+			if let Some(bo) = &self.fb_bo {
+				return Some(bo.clone())
+			} else {
+				return None
+			}
+		}
 
 		if size == 0 {
 			return None
