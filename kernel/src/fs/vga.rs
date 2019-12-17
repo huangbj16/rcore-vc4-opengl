@@ -1,6 +1,6 @@
 use rcore_fs::vfs::*;
 
-use crate::drivers::gpu::fb::FRAME_BUFFER;
+use crate::drivers::gpu::fb::{FRAME_BUFFER, FramebufferInfo};
 use crate::memory::phys_to_virt;
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::any::Any;
@@ -57,6 +57,7 @@ impl INode for Vga {
     }
     fn io_control(&self, cmd: u32, data: usize) -> Result<()> {
         info!("cmd {:#x} , data {:#x} vga not support ioctl !", cmd, data);
+        info!("FBIOGET_FSCREENINFO: {}", FBIOGET_VSCREENINFO);
         match cmd {
             FBIOGET_FSCREENINFO => {
                 let fb_fix_info = unsafe { &mut *(data as *mut fb_fix_screeninfo) };
@@ -64,16 +65,24 @@ impl INode for Vga {
                     fb.fill_fix_screeninfo(fb_fix_info);
                 }
                 Ok(())
-            }
+            },
             FBIOGET_VSCREENINFO => {
                 let fb_var_info = unsafe { &mut *(data as *mut fb_var_screeninfo) };
                 if let Some(fb) = FRAME_BUFFER.lock().as_ref() {
                     fb.fill_var_screeninfo(fb_var_info);
+                    info!("xres: {}, yres: {}", fb_var_info.xres, fb_var_info.yres);
                 }
                 Ok(())
-            }
+            },
+            FBIOPAN_DISPLAY => {
+                let fb_var_info = unsafe { &mut *(data as *mut FramebufferInfo) };
+                if let Some(fb) = FRAME_BUFFER.lock().as_mut() {
+                    fb.set_frame_offset(fb_var_info);
+                }
+                Ok(())
+            },
             _ => {
-                warn!("use never support ioctl !");
+                info!("use never support ioctl !");
                 Err(FsError::NotSupported)
             }
         }
@@ -87,6 +96,7 @@ impl INode for Vga {
 
 const FBIOGET_FSCREENINFO: u32 = 0x4602;
 const FBIOGET_VSCREENINFO: u32 = 0x4600;
+const FBIOPAN_DISPLAY    : u32 = 0x4606;
 
 #[repr(C)]
 pub struct fb_fix_screeninfo {

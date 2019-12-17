@@ -360,7 +360,7 @@ pub fn framebuffer_alloc(
             id: RPI_FIRMWARE_FRAMEBUFFER_SET_VIRTUAL_WIDTH_HEIGHT,
             buf_size: 8,
             req_resp_size: 0,
-            buf: [width, height],
+            buf: [width, 2 * height],
         },
         // Set depth; Returns bits per pixel.
         set_depth: PropertyMailboxTag {

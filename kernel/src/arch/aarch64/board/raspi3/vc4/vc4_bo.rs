@@ -40,7 +40,7 @@ impl GpuDevice {
 			if bo_entry.handle != handle || bo_entry.size == 0 {
 				return None
 			} else {
-				Some(bo.clone());
+				return Some(bo.clone())
 			}
 		}
 		None
@@ -83,13 +83,14 @@ impl GpuDevice {
 																	vaddr: vaddr,
 																	bo_type: bo_type	
 																})));
+				//println!("VC4: insert a bo entry: handle: {}, size: {}", handle, size);
 				if let Some(bo) = self.handle_bo_map.get(&handle) {
 					Some(bo.clone())
 				} else {
 					None
 				}
 			} else {
-				println!("VC4: unable to lock memory at handle {}", handle);
+				//println!("VC4: unable to lock memory at handle {}", handle);
 				if let Err(r) = mailbox::mem_free(handle) {
 					println!("VC4: unable to free memory at handle {}", handle);
 				}
@@ -109,6 +110,8 @@ impl GpuDevice {
 				return
 			}
 
+			//println!("VC4: try to destroy bo {}", handle);
+
 			memory::iounmap(bo_entry.vaddr, bo_entry.size as usize);
 			if let Ok(res) = mailbox::mem_unlock(handle) {
 				if let Ok(res) = mailbox::mem_free(handle) {
@@ -123,6 +126,7 @@ impl GpuDevice {
 
 		if ifDestroy {
 			self.handle_bo_map.remove(&handle);
+			//println!("VC4: successfully remove handle {}", handle);
 		}
 	}
 
@@ -143,8 +147,10 @@ impl GpuDevice {
 			args.size = bo_entry.size as u32;
 			args.handle = bo_entry.handle;
 		} else {
+			println!("videocore: not able to create bo!");
 			return Err(FsError::IOCTLError)//error
 		}
+		//println!("videocore: create bo successfully {}!", args.handle);
 		Ok(())//success
 	}
 
@@ -164,6 +170,7 @@ impl GpuDevice {
 	pub fn vc4_mmap_bo_ioctl(&self, data: usize) -> Result<()>
 	{
 		let args = unsafe { &mut *(data as *mut drm_vc4_mmap_bo) };
+		//println!("vc4: mmap handle: {}", args.handle);
 
 		if let Some(bo) = self.vc4_lookup_bo(args.handle) {
 			//attr
@@ -187,7 +194,7 @@ impl GpuDevice {
 				)
 			}
 			info!("mmap for /dev/gpu0");
-			args.offset = vaddr;
+			args.offset = vaddr as u64;
 			Ok(())
 		} else {
 			return Err(FsError::InvalidParam)

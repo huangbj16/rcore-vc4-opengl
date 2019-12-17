@@ -12,11 +12,11 @@ const fn bit_32(nr: u32) -> u32 {
     1 << nr
 }
 
-const fn mask8(low: u8, high: u8) -> u8 {
+const fn mask8(high: u8, low: u8) -> u8 {
     (1 << ((high) - (low) + 1) - 1) << (low)
 }
 
-const fn mask16(low: u16, high: u16) -> u16 {
+const fn mask16(high: u16, low: u16) -> u16 {
     (1 << ((high) - (low) + 1) - 1) << (low)
 }
 

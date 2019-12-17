@@ -325,6 +325,7 @@ impl GpuDevice {
 
 		if let Some(rcl_bo) = self.vc4_bo_create(size, VC4_BO_TYPE_RCL) {
 			let bo_entry = rcl_bo.lock();
+			exec.exec_list.push(bo_entry.handle);
 			setup.rcl.base = bo_entry.vaddr;
 			setup.rcl.next = bo_entry.vaddr;
 			setup.rcl.size = size;

@@ -30,15 +30,15 @@ pub fn vc4_flush_caches()
 }
 
 pub fn v3d_ctncs(thread: u32) -> usize {
-	V3D_CT0CS + 4 * (thread as usize)
+	V3D_CT0CS + (thread as usize)
 }
 
 pub fn v3d_ctnca(thread: u32) -> usize {
-	V3D_CT0CA + 4 * (thread as usize)
+	V3D_CT0CA + (thread as usize)
 }
 
 pub fn v3d_ctnea(thread: u32) -> usize {
-	V3D_CT0EA + 4 * (thread as usize)
+	V3D_CT0EA + (thread as usize)
 }
 
 pub fn submit_cl(thread: u32, start: u32, end: u32) {
@@ -51,6 +51,7 @@ pub fn submit_cl(thread: u32, start: u32, end: u32) {
 	v3d.write(v3d_ctncs(thread), 0x20);
 
 	// Wait for thread to stop
+	//println!("wait for thread to stop");
 	while (v3d.read(v3d_ctncs(thread)) & 0x20) != 0 {}
 
 	v3d.write(v3d_ctnca(thread), start);
@@ -177,7 +178,7 @@ pub struct vc4_exec_info<'a> {
 	 */
 	// TODO
 	//unref_list: list_entry_t,
-	unref_list: Vec<Arc<Mutex<gpu_bo>>>,
+	pub exec_list: Vec<u32>,
 
 	/* Current unvalidated indices into @bo loaded by the non-hardware
 	 * VC4_PACKET_GEM_HANDLES.
@@ -227,6 +228,14 @@ pub struct vc4_exec_info<'a> {
 }
 
 impl GpuDevice {
+	pub fn vc4_complete_exec(&mut self, exec: &vc4_exec_info)
+	{
+		// struct vc4_dev *vc4 = to_vc4_dev(dev);
+		for i in 0..exec.exec_list.len() {
+			self.vc4_bo_destroy(exec.exec_list[i]);
+		}
+	}
+
 	pub fn vc4_cl_lookup_bos(&self, exec:&mut vc4_exec_info) -> Result<()>
 	{
 		exec.bo_count = exec.args.bo_handle_count;
@@ -257,6 +266,7 @@ impl GpuDevice {
 			if let Some(bo) = self.vc4_lookup_bo(handles[i]) {
 				exec.bo.push(bo.clone());
 			} else {
+				println!("VC4: cannot find handle {}", handles[i]);
 				return Err(FsError::InvalidParam)
 			}
 		}
@@ -298,9 +308,9 @@ impl GpuDevice {
 		// 	goto fail;
 		// }
 
-		// exec.shader_rec_u = shader_rec_offset;
-		// exec.shader_state = exec_size;
-		// exec.shader_state_size = exec.args.shader_rec_count;
+		//exec.shader_rec_u = shader_rec_offset;
+		//exec.shader_state = exec_size;
+		exec.shader_state_size = exec.args.shader_rec_count;
 
 		// let mut temp: Vec<u8> = Vec::with_capacity(temp_size);
 
@@ -330,6 +340,7 @@ impl GpuDevice {
 		if let Some(bo) = self.vc4_bo_create(exec_size, VC4_BO_TYPE_BCL) {
 			exec.exec_bo =Some(bo.clone());
 			let bo_entry = bo.lock();
+			exec.exec_list.push(bo_entry.handle);
 			exec.ct0ca = bo_entry.paddr as u32 + bin_offset;
 			exec.shader_rec_v = bo_entry.vaddr + shader_rec_offset as usize;
 			exec.shader_rec_p = bo_entry.paddr + shader_rec_offset;
@@ -363,14 +374,14 @@ impl GpuDevice {
 			})
 		}
 
-		exec.shader_state_count = exec.args.shader_rec_count;
+		//exec.shader_state_count = exec.args.shader_rec_count;
 
 		self.vc4_validate_bin_cl(exec, bin_start_addr, &temp)?;
 		
 		let shader_baddr: usize = exec.args.shader_rec;		
 		temp.clear();
 		for i in 0..exec.args.shader_rec_size as usize {
-			let vaddr = baddr + i;
+			let vaddr = shader_baddr + i;
 			if let Some(b) = copy_from_user(vaddr as *const u8) {
 				temp.push(b);
 			} else {
@@ -380,7 +391,6 @@ impl GpuDevice {
 
 		self.vc4_validate_shader_recs(exec, &temp)?;
 
-		//list_add_before(&exec.unref_list, &exec.exec_bo.unref_head);
 		Ok(())
 	}
 
@@ -423,6 +433,7 @@ impl GpuDevice {
 
 		submit_cl(1, exec.ct1ca, exec.ct1ea);
 
+		println!("wait for render to finish");
 		// wait for render to finish
 		{
 			let v3d = V3D.lock();
@@ -434,7 +445,9 @@ impl GpuDevice {
 	{
 		// TODO
 		self.vc4_submit_next_bin_job(&exec);
+		//println!("VC4: submit job over");
 		self.vc4_submit_next_render_job(&exec);
+		//println!("VC4: submit render job over");
 	}
 
 	// TODO
@@ -447,7 +460,7 @@ impl GpuDevice {
 			args: args,
 			bo: Vec::new(),
 			bo_count: 0,
-			unref_list: Vec::new(),
+			exec_list: Vec::new(),
 
 			bo_index: [0, 0],
 			
@@ -472,7 +485,9 @@ impl GpuDevice {
 			shader_rec_size: 0,
 		};
 
+		//println!("VC4: try to lookup bos");
 		self.vc4_cl_lookup_bos(&mut exec)?;
+		//println!("VC4: lookup bos over");
 		// TODO this
 		// if ret != 0 {
 		// 	vc4_complete_exec(dev, &exec)?;
@@ -480,7 +495,9 @@ impl GpuDevice {
 		// }
 
 		if exec.args.bin_cl_size != 0 {
+			//println!("VC4: try to get bcl");
 			self.vc4_get_bcl(&mut exec)?;
+			//println!("VC4: get bcl over");
 			//TODO clean
 			// if ret != 0 {
 			// 	vc4_complete_exec(dev, &exec);
@@ -491,6 +508,7 @@ impl GpuDevice {
 			exec.ct0ea = 0;
 		}
 
+		//println!("VC4: try to get rcl");
 		self.vc4_get_rcl(&mut exec)?;
 
 		// //TODO for clean
@@ -500,9 +518,10 @@ impl GpuDevice {
 		//  * since it's part of our stack.
 		//  */
 		// exec.args = Option<None>;
+		//println!("VC4: submit queue");
 		self.vc4_queue_submit(&exec);
-		// //TODO for clean
-		// //vc4_complete_exec(dev, &exec);
+		self.vc4_complete_exec(&exec);
+		//println!("VC4: submit clean up over");
 		Ok(())	
 	}
 }

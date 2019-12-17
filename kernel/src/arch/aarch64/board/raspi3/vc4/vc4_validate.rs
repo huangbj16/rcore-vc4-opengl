@@ -57,7 +57,6 @@ pub fn validate_indexed_prim_list(exec: &mut vc4_exec_info, validated: usize, un
 		return Err(FsError::InvalidParam)
 	}
 	let length: u32 = read32_from_slice(&untrusted[1..5]);
-	let length: u32 = read32_from_slice(&untrusted[1..5]);
 	let offset: u32 = read32_from_slice(&untrusted[5..9]);
 	let max_index: u32 = read32_from_slice(&untrusted[9..13]);
 	let index_size: u32;
@@ -84,7 +83,7 @@ pub fn validate_indexed_prim_list(exec: &mut vc4_exec_info, validated: usize, un
 			print!("vc4: IB access overflow ({} + {}*{} > {})\n", offset, length, index_size, ib_entry.size);
 			return Err(FsError::InvalidParam)
 		}
-		unsafe { *((validated + 14) as *mut u32) = ib_entry.paddr + offset; }
+		unsafe { *((validated + 5) as *mut u32) = ib_entry.paddr + offset; }
 		//put_unaligned_32(validated + 5, ib.paddr + offset);
 		Ok(())
 	} else {
@@ -122,7 +121,7 @@ pub fn validate_nv_shader_state(exec: &mut vc4_exec_info, validated: usize, untr
 	exec.shader_state_count += 1;
 
 	if (i >= exec.shader_state_size) {
-		println!("vc4: More requests for shader states than declared");
+		println!("vc4: requests {} for shader states is more than declared {}", i, exec.shader_state_size);
 		return Err(FsError::InvalidParam)
 	}
 
@@ -141,7 +140,6 @@ pub fn validate_tile_binning_config(exec: &mut vc4_exec_info, validated: usize, 
 {
 	let tile_count: u32;
 
-	//???怎么只取指定的8个bits?
 	exec.bin_tiles_x = untrusted[12];
 	exec.bin_tiles_y = untrusted[13];
 	tile_count = (exec.bin_tiles_x as u32) * (exec.bin_tiles_y as u32);
@@ -178,6 +176,7 @@ pub fn validate_gem_handles(exec: &mut vc4_exec_info, validated: usize, untruste
 	// memcpy(exec.bo_index, untrusted, sizeof(exec.bo_index));
 	for i in 0..exec.bo_index.len() {
 		exec.bo_index[i] = read32_from_slice(&untrusted[(i * 4)..(i * 4 + 4)]);
+		//println!("VC4: exec bo_index {}: {}", i, exec.bo_index[i]);
 	}
 	Ok(())
 }
@@ -328,6 +327,7 @@ impl GpuDevice {
 
 		for i in 0..nr_relocs as usize {
 			let handle = read32_from_slice(&shader_u[(i * 4)..(i * 4 + 4)]);
+			//println!("VC4 validate nv shader rec: handle: {}", handle);
 			if let Some(bo_item) = vc4_use_bo(exec, handle) {
 				bo.push(bo_item.clone());
 			} else {
@@ -366,8 +366,10 @@ impl GpuDevice {
 
 	pub fn vc4_validate_shader_recs(&self, exec: &mut vc4_exec_info, shaders: & Vec<u8>)  -> Result<()>
 	{
+		//println!("VC4: validate shader recs");
 		let mut shader_begin: usize = 0;
 		for i in 0..exec.shader_state_count {
+			//println!("VC4 shader_begin: {}", shader_begin);
 			self.validate_nv_shader_rec(exec, i, &shaders[shader_begin..], &mut shader_begin)?;
 		}
 		Ok(())

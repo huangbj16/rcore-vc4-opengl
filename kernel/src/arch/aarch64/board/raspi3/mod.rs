@@ -1,5 +1,4 @@
 //! Raspberry PI 3 Model B/B+
-
 use bcm2837::{addr::bus_to_phys, atags::Atags};
 
 pub mod emmc;
@@ -9,7 +8,7 @@ pub mod serial;
 pub mod timer;
 pub mod vc4;
 
-use crate::drivers::gpu::fb::{self, ColorDepth, ColorFormat, FramebufferInfo, FramebufferResult};
+use crate::drivers::gpu::fb::{self, ColorDepth, ColorFormat, FramebufferInfo, FramebufferResult, Framebuffer};
 use crate::consts::{KERNEL_OFFSET};
 use core::convert::TryInto;
 use self::vc4::v3dReg::*;
@@ -110,6 +109,18 @@ fn probe_fb_info(width: u32, height: u32, depth: u32) -> FramebufferResult {
         vaddr: vaddr,
         screen_size: info.screen_size as usize,
     })
+}
+
+impl Framebuffer {
+    pub fn set_frame_offset(&mut self, var_info: & FramebufferInfo) {
+
+        if let Ok(ret) = mailbox::framebuffer_set_virtual_offset(var_info.xoffset, var_info.yoffset) {
+            self.fb_info.xoffset = var_info.xoffset;
+            self.fb_info.yoffset = var_info.yoffset;
+        } else {
+            println!("VC4: failed to set offset as ({}, {})", var_info.xoffset, var_info.yoffset);
+        }
+    }
 }
 
 

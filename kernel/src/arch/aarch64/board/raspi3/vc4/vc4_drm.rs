@@ -35,5 +35,5 @@ pub struct drm_vc4_mmap_bo {
 	/** Handle for the object being mapped. */
 	pub handle: u32,
 	/** offset into the drm node to use for subsequent mmap call. */
-	pub offset: usize,
+	pub offset: u64,
 }

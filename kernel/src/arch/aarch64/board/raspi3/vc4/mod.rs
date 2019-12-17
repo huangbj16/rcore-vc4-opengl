@@ -59,7 +59,7 @@ impl GpuDevice {
 
 		//check framebuffer
 		{
-			if let Some(ffb) = fb::FRAME_BUFFER.lock().take() {
+			if let Some(ffb) = fb::FRAME_BUFFER.lock().as_ref() {
 				let mut handle: u32 = 0;
 				for i in 1..5 {
 					if let Ok(busaddr) = mailbox::mem_lock(i) {
