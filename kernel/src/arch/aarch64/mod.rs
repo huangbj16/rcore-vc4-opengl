@@ -40,7 +40,6 @@ pub extern "C" fn master_main() -> ! {
 
     crate::process::init();
 
-    //board::test_gpu();
     //test_framebuffer();
 
     // wake up other CPUs
