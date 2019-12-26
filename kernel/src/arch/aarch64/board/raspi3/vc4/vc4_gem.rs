@@ -433,7 +433,7 @@ impl GpuDevice {
 
 		submit_cl(1, exec.ct1ca, exec.ct1ea);
 
-		println!("wait for render to finish");
+		//println!("wait for render to finish");
 		// wait for render to finish
 		{
 			let v3d = V3D.lock();
